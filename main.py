@@ -1,25 +1,69 @@
-import flet as ft
-import json
 import os
+import sqlite3
 import hashlib
+import flet as ft
 
-USERS_FILE = "users.json"
+# Попытка импортировать bcrypt; если нет — будем использовать sha256 (менее безопасно)
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except Exception:
+    HAS_BCRYPT = False
 
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    try:
-        with open(USERS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+DB_FILE = "users.db"
 
-def save_users(users):
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
+def init_db():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if HAS_BCRYPT:
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    else:
+        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    if HAS_BCRYPT:
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+        except Exception:
+            return False
+    else:
+        return hashlib.sha256(password.encode("utf-8")).hexdigest() == stored_hash
+
+# Инициализация БД
+conn = init_db()
+cur = conn.cursor()
+
+def create_user(username: str, password: str) -> tuple[bool, str]:
+    username = username.strip()
+    if not username or not password:
+        return False, "Введите логин и пароль"
+    try:
+        ph = hash_password(password)
+        cur.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, ph))
+        conn.commit()
+        return True, "OK"
+    except sqlite3.IntegrityError:
+        return False, "Пользователь уже существует"
+    except Exception as e:
+        return False, f"Ошибка: {e}"
+
+def find_user(username: str):
+    cur.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
+    return cur.fetchone()
+
+# Хранилище онлайн пользователей (в рамках одного процесса)
+online_users = set()
 
 def main(page: ft.Page):
     page.title = "Echoshade"
@@ -28,60 +72,75 @@ def main(page: ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    users = load_users()
-    current_username = {"value": None}  # mutable holder for closure
+    current_user = {"name": None}
 
-    # ---------- CHAT UI ----------
+    # ---------- CHAT ----------
     def open_chat(username: str):
         page.clean()
-        current_username["value"] = username
+        current_user["name"] = username
+        online_users.add(username)
 
-        header = ft.Row([
-            ft.Text(f"Echoshade — {username}", size=20, weight="bold"),
-            ft.Spacer(),
-            ft.ElevatedButton("Выйти", on_click=lambda e: show_auth())
-        ], alignment=ft.MainAxisAlignment.CENTER)
+        # Header: название + список онлайн + кнопка выйти
+        header = ft.Row(
+            [
+                ft.Text("Echoshade", size=20, weight="bold"),
+                ft.Text(f"Онлайн: {', '.join(sorted(online_users))}", size=14),
+                ft.Row([], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),  # placeholder для выравнивания
+                ft.ElevatedButton("Выйти", on_click=lambda e: do_logout(e, username))
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            width=900
+        )
 
         chat = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
         message_input = ft.TextField(hint_text="Напишіть повідомлення...", expand=True)
 
         def on_message(msg):
-            # msg is a plain string sent via pubsub
             chat.controls.append(ft.Text(msg))
             page.update()
 
-        # Подписываемся на pubsub (каждый клиент)
         page.pubsub.subscribe(on_message)
 
         def send_click(e):
             text = (message_input.value or "").strip()
             if not text:
                 return
-            sender = current_username["value"] or "Unknown"
+            sender = current_user["name"] or "Unknown"
             page.pubsub.send_all(f"{sender}: {text}")
             message_input.value = ""
             page.update()
 
-        emoji_row = ft.Row([
-            ft.ElevatedButton("😀", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "😀"), message_input.focus(), page.update())),
-            ft.ElevatedButton("🔥", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "🔥"), message_input.focus(), page.update())),
-            ft.ElevatedButton("😂", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "😂"), message_input.focus(), page.update())),
-        ])
+        emoji_row = ft.Row(
+            [
+                ft.ElevatedButton("😀", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "😀"), message_input.focus(), page.update())),
+                ft.ElevatedButton("🔥", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "🔥"), message_input.focus(), page.update())),
+                ft.ElevatedButton("😂", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "😂"), message_input.focus(), page.update())),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER
+        )
 
         page.add(
-            header,
-            ft.Divider(),
-            chat,
-            emoji_row,
-            ft.Row([message_input, ft.ElevatedButton("Надіслати", on_click=send_click)], alignment=ft.MainAxisAlignment.CENTER)
+            ft.Column([header, ft.Divider(), chat, emoji_row, ft.Row([message_input, ft.ElevatedButton("Надіслати", on_click=send_click)], alignment=ft.MainAxisAlignment.CENTER)], width=900)
         )
+
+    def do_logout(e, username):
+        try:
+            online_users.discard(username)
+        except Exception:
+            pass
+        current_user["name"] = None
+        # уведомляем остальных, что пользователь вышел
+        page.pubsub.send_all(f"System: {username} вышел(а).")
+        show_auth()
 
     # ---------- AUTH / REGISTER UI ----------
     username_field = ft.TextField(label="Имя пользователя", width=320)
     password_field = ft.TextField(label="Пароль", password=True, can_reveal_password=True, width=320)
+    auth_error = ft.Text("", color="red")
+
     reg_username = ft.TextField(label="Имя пользователя (регистрация)", width=320)
     reg_password = ft.TextField(label="Пароль (регистрация)", password=True, can_reveal_password=True, width=320)
-    auth_error = ft.Text("", color="red")
     reg_error = ft.Text("", color="red")
     reg_success = ft.Text("", color="green")
 
@@ -92,34 +151,31 @@ def main(page: ft.Page):
             auth_error.value = "Введите логин и пароль"
             page.update()
             return
-        u = users.get(login)
-        if not u:
+        row = find_user(login)
+        if not row:
             auth_error.value = "Пользователь не найден"
             page.update()
             return
-        if u.get("password_hash") != hash_password(pwd):
+        _, uname, stored_hash = row
+        if not verify_password(pwd, stored_hash):
             auth_error.value = "Неверный пароль"
             page.update()
             return
         auth_error.value = ""
         page.update()
+        # уведомляем остальных, что пользователь вошёл
+        page.pubsub.send_all(f"System: {login} вошёл(ла).")
         open_chat(login)
 
     def do_register(e):
         login = (reg_username.value or "").strip()
         pwd = (reg_password.value or "").strip()
-        if not login or not pwd:
-            reg_error.value = "Введите логин и пароль"
+        ok, msg = create_user(login, pwd)
+        if not ok:
+            reg_error.value = msg
             reg_success.value = ""
             page.update()
             return
-        if login in users:
-            reg_error.value = "Пользователь уже существует"
-            reg_success.value = ""
-            page.update()
-            return
-        users[login] = {"password_hash": hash_password(pwd)}
-        save_users(users)
         reg_error.value = ""
         reg_success.value = "Регистрация успешна. Теперь войдите."
         reg_username.value = ""
@@ -162,10 +218,10 @@ def main(page: ft.Page):
 
         page.add(ft.Column([auth_card], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER))
 
-    # стартовый экран
+    # старт
     show_auth()
 
 if __name__ == "__main__":
-    # Render предоставляет PORT в окружении; привязываемся к нему и к 0.0.0.0
     port = int(os.environ.get("PORT", "8550"))
+    # Render требует 0.0.0.0
     ft.app(target=main, view=ft.AppView.WEB_BROWSER, host="0.0.0.0", port=port)

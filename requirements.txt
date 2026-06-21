@@ -1,1 +1,4 @@
 flet==0.85.3
+bcrypt
+cffi
+wheel
