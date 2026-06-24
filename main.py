@@ -500,7 +500,7 @@ class LogicordApp:
             padding=24,
             border_radius=24,
             bgcolor=p["panel_2"],
-            border=ft.border.all(1, p["stroke"]),
+            border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     ft.Row(
@@ -558,7 +558,7 @@ class LogicordApp:
                 padding=12,
                 border_radius=18,
                 bgcolor=bubble_bg,
-                border=ft.border.all(1, p["stroke"]),
+                border=ft.Border.all(1, p["stroke"]),
                 content=ft.Column(
                     [
                         header,
@@ -578,7 +578,7 @@ class LogicordApp:
             padding=14,
             border_radius=24,
             bgcolor=p["panel"],
-            border=ft.border.all(1, p["stroke"]),
+            border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     ft.Row(
@@ -678,7 +678,7 @@ class LogicordApp:
             padding=12,
             border_radius=20,
             bgcolor=p["panel"],
-            border=ft.border.all(1, p["stroke"]),
+            border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     ft.Row(
@@ -706,7 +706,7 @@ class LogicordApp:
             padding=16,
             border_radius=24,
             bgcolor=p["panel_2"],
-            border=ft.border.all(1, p["stroke"]),
+            border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     ft.Row(
@@ -737,7 +737,7 @@ class LogicordApp:
             padding=14,
             border_radius=24,
             bgcolor=p["panel"],
-            border=ft.border.all(1, p["stroke"]),
+            border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     ft.Text("Профиль", size=12, color=p["muted"]),
