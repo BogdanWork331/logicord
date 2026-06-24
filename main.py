@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -12,8 +11,8 @@ from database import (
     authenticate_user,
     create_user,
     get_profile,
-    get_settings,
     get_user_by_id,
+    get_settings,
     init_db,
     list_all_users,
     save_settings,
@@ -71,7 +70,6 @@ EMOJIS = [
     "🔥", "❤️", "👍", "👎", "💡", "⚡",
     "🎉", "🎮", "💻", "🚀", "⭐", "🛡️",
 ]
-
 
 CHAT_MESSAGES: list[dict[str, Any]] = []
 ONLINE_USERS: dict[int, dict[str, Any]] = {}
@@ -182,7 +180,6 @@ class LogicordApp:
             "bio": "",
             "theme": "dark",
         }
-        settings = get_settings(user["id"])
         self.state.theme = self.state.profile.get("theme") or "dark"
 
         ONLINE_USERS[user["id"]] = {
@@ -194,8 +191,6 @@ class LogicordApp:
         }
 
         save_settings(user["id"], remember_me=remember)
-        self.page.session.set("uid", user["id"])
-        self.page.session.set("remember_me", 1 if remember else 0)
         self.state.error = ""
         self.state.success = "Успешный вход"
         self.apply_theme()
@@ -230,7 +225,6 @@ class LogicordApp:
     def logout(self) -> None:
         if self.state.user:
             ONLINE_USERS.pop(self.state.user["id"], None)
-        self.page.session.remove("uid")
         self.state.user = None
         self.state.profile = None
         self.state.emoji_open = False
@@ -457,7 +451,14 @@ class LogicordApp:
                 login_remember,
                 ft.Row(
                     [
-                        ft.FilledButton("Войти", on_click=lambda e: self.login(login_username.value, login_password.value, login_remember.value)),
+                        ft.FilledButton(
+                            "Войти",
+                            on_click=lambda e: self.login(
+                                login_username.value,
+                                login_password.value,
+                                login_remember.value,
+                            ),
+                        ),
                         ft.TextButton("Регистрация", on_click=lambda e: self.toggle_mode("register")),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -504,14 +505,8 @@ class LogicordApp:
                 [
                     ft.Row(
                         [
-                            ft.OutlinedButton(
-                                "Вход",
-                                on_click=lambda e: self.toggle_mode("login"),
-                            ),
-                            ft.OutlinedButton(
-                                "Регистрация",
-                                on_click=lambda e: self.toggle_mode("register"),
-                            ),
+                            ft.OutlinedButton("Вход", on_click=lambda e: self.toggle_mode("login")),
+                            ft.OutlinedButton("Регистрация", on_click=lambda e: self.toggle_mode("register")),
                         ],
                         alignment=ft.MainAxisAlignment.START,
                     ),
@@ -545,7 +540,12 @@ class LogicordApp:
 
         header = ft.Row(
             [
-                ft.Text(f'{msg["avatar"]} {msg["display_name"]}', size=12, weight=ft.FontWeight.BOLD, color=text_color),
+                ft.Text(
+                    f'{msg["avatar"]} {msg["display_name"]}',
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color=text_color,
+                ),
                 ft.Text(msg["time"], size=10, color=text_color),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -639,6 +639,12 @@ class LogicordApp:
             ),
         )
 
+        self.state.message_field = ft.TextField(
+            hint_text="Напишите сообщение...",
+            expand=True,
+            on_submit=lambda e: self.send_message(),
+        )
+
         messages_column = ft.Column(
             [
                 *[self.build_message(msg) for msg in CHAT_MESSAGES],
@@ -646,6 +652,26 @@ class LogicordApp:
             spacing=10,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
+        )
+
+        emoji_panel = ft.Container(
+            visible=self.state.emoji_open,
+            padding=8,
+            border_radius=14,
+            bgcolor=p["panel_2"],
+            content=ft.Wrap(
+                spacing=6,
+                run_spacing=6,
+                children=[
+                    ft.OutlinedButton(
+                        e,
+                        width=44,
+                        height=36,
+                        on_click=lambda ev, emoji=e: self.add_emoji(emoji),
+                    )
+                    for e in EMOJIS
+                ],
+            ),
         )
 
         composer = ft.Container(
@@ -662,35 +688,13 @@ class LogicordApp:
                                 tooltip="Эмодзи",
                                 on_click=lambda e: self.toggle_emoji_panel(),
                             ),
-                            ft.TextField(
-                                hint_text="Напишите сообщение...",
-                                expand=True,
-                                on_submit=lambda e: self.send_message(),
-                            ),
+                            self.state.message_field,
                             ft.FilledButton("Отправить", on_click=lambda e: self.send_message()),
                         ],
                         spacing=10,
                         vertical_alignment=ft.CrossAxisAlignment.END,
                     ),
-                    ft.Container(
-                        visible=self.state.emoji_open,
-                        padding=8,
-                        border_radius=14,
-                        bgcolor=p["panel_2"],
-                        content=ft.Wrap(
-                            spacing=6,
-                            run_spacing=6,
-                            children=[
-                                ft.OutlinedButton(
-                                    e,
-                                    width=44,
-                                    height=36,
-                                    on_click=lambda ev, emoji=e: self.add_emoji(emoji),
-                                )
-                                for e in EMOJIS
-                            ],
-                        ),
-                    ),
+                    emoji_panel,
                 ],
                 spacing=10,
                 tight=True,
@@ -771,8 +775,34 @@ class LogicordApp:
                         ],
                         wrap=True,
                     ),
+                    ft.Divider(height=10, color=p["stroke"]),
+                    ft.Text("Все пользователи", size=12, color=p["muted"]),
+                    *[
+                        ft.Container(
+                            padding=8,
+                            border_radius=12,
+                            bgcolor=p["panel_2"],
+                            content=ft.Row(
+                                [
+                                    ft.Text((u["avatar"] if u["avatar"] else "😀"), size=14),
+                                    ft.Column(
+                                        [
+                                            ft.Text(u["display_name"] or u["username"], color=p["text"], size=12),
+                                            ft.Text(f"@{u['username']}", color=p["muted"], size=10),
+                                        ],
+                                        spacing=0,
+                                        tight=True,
+                                    ),
+                                ],
+                                spacing=8,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            ),
+                        )
+                        for u in list_all_users()
+                    ],
                 ],
                 spacing=8,
+                scroll=ft.ScrollMode.AUTO,
             ),
         )
 
@@ -803,27 +833,11 @@ def main(page: ft.Page):
 
     app = LogicordApp(page)
 
-    page.pubsub.subscribe(lambda data: app.render() if isinstance(data, dict) and data.get("type") == "refresh" else None)
+    def on_pubsub(data):
+        if isinstance(data, dict) and data.get("type") == "refresh":
+            app.render()
 
-    uid = page.session.get("uid")
-    if uid:
-        user = get_user_by_id(int(uid))
-        if user:
-            app.state.user = user
-            app.state.profile = get_profile(user["id"]) or {
-                "display_name": user["username"],
-                "avatar": "😀",
-                "bio": "",
-                "theme": "dark",
-            }
-            app.state.theme = app.state.profile.get("theme") or "dark"
-            ONLINE_USERS[user["id"]] = {
-                "id": user["id"],
-                "username": user["username"],
-                "display_name": app.state.profile.get("display_name") or user["username"],
-                "avatar": app.state.profile.get("avatar") or "😀",
-                "role": user.get("role", "user"),
-            }
+    page.pubsub.subscribe(on_pubsub)
 
     app.render()
 

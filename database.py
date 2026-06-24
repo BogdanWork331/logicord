@@ -63,7 +63,12 @@ def init_db() -> None:
         )
 
 
-def create_user(username: str, password: str, avatar: str = "😀", display_name: str | None = None) -> tuple[bool, str]:
+def create_user(
+    username: str,
+    password: str,
+    avatar: str = "😀",
+    display_name: str | None = None,
+) -> tuple[bool, str]:
     username = (username or "").strip()
     password = (password or "").strip()
     display_name = (display_name or "").strip() or username
