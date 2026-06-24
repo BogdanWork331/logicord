@@ -659,10 +659,11 @@ class LogicordApp:
             padding=8,
             border_radius=14,
             bgcolor=p["panel_2"],
-            content=ft.Wrap(
+            content=ft.Row(
+                wrap=True,
                 spacing=6,
                 run_spacing=6,
-                children=[
+                controls=[
                     ft.OutlinedButton(
                         e,
                         width=44,
