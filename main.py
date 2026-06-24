@@ -1,227 +1,547 @@
-import os
-import sqlite3
-import hashlib
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
 import flet as ft
 
-# Попытка импортировать bcrypt; если нет — будем использовать sha256 (менее безопасно)
-try:
-    import bcrypt
-    HAS_BCRYPT = True
-except Exception:
-    HAS_BCRYPT = False
+from core.config import APP_NAME, DEFAULT_BACKGROUND, DEFAULT_LANGUAGE, DEFAULT_THEME
+from core.database import (
+    init_db,
+    create_user,
+    authenticate_user,
+    get_profile,
+    upsert_profile,
+    save_settings,
+    get_settings,
+    list_channels,
+    get_channel_by_name,
+    create_channel,
+    create_message,
+    update_message,
+    delete_message,
+    pin_message,
+    get_user_by_id,
+    get_channel,
+)
+from core.logger import setup_logging
+from core.security import login_rate_limiter, normalize_username, is_valid_username
+from ui.auth import build_auth_view
+from ui.chat import build_chat_view
+from ui.theme import build_page_theme
 
-DB_FILE = "users.db"
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+logger = setup_logging()
+
+
+@dataclass
+class AppState:
+    user: dict[str, Any] | None = None
+    profile: dict[str, Any] | None = None
+    theme: str = DEFAULT_THEME
+    background: str = DEFAULT_BACKGROUND
+    language: str = DEFAULT_LANGUAGE
+    remember_me: bool = False
+    selected_channel_id: int | None = None
+    message_input: ft.TextField | None = None
+    online_users: dict[int, dict[str, Any]] | None = None
+
+
+class LogicordApp:
+    def __init__(self, page: ft.Page) -> None:
+        self.page = page
+        self.state = AppState(
+            online_users={},
         )
-    """)
-    conn.commit()
-    return conn
+        self._emoji_input: ft.TextField | None = None
 
-def hash_password(password: str) -> str:
-    if HAS_BCRYPT:
-        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    else:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    @property
+    def is_admin(self) -> bool:
+        return bool(self.state.user and self.state.user.get("role") == "admin")
 
-def verify_password(password: str, stored_hash: str) -> bool:
-    if HAS_BCRYPT:
-        try:
-            return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
-        except Exception:
-            return False
-    else:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest() == stored_hash
+    def toast(self, message: str) -> None:
+        self.page.snack_bar = ft.SnackBar(ft.Text(message), open=True)
+        self.page.update()
 
-# Инициализация БД
-conn = init_db()
-cur = conn.cursor()
+    def init_session(self) -> None:
+        self.page.title = APP_NAME
+        self.page.padding = 0
+        self.page.spacing = 0
+        self.page.theme_mode = ft.ThemeMode.DARK
+        self.page.theme = build_page_theme(self.state.theme)
+        self.page.bgcolor = None
+        self.page.window_min_width = 1100
+        self.page.window_min_height = 720
 
-def create_user(username: str, password: str) -> tuple[bool, str]:
-    username = username.strip()
-    if not username or not password:
-        return False, "Введите логин и пароль"
-    try:
-        ph = hash_password(password)
-        cur.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, ph))
-        conn.commit()
-        return True, "OK"
-    except sqlite3.IntegrityError:
-        return False, "Пользователь уже существует"
-    except Exception as e:
-        return False, f"Ошибка: {e}"
+        self.page.pubsub.subscribe(self._on_pubsub)
 
-def find_user(username: str):
-    cur.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
-    return cur.fetchone()
-
-# Хранилище онлайн пользователей (в рамках одного процесса)
-online_users = set()
-
-def main(page: ft.Page):
-    page.title = "Echoshade"
-    page.theme_mode = "dark"
-    page.bgcolor = "#0f0f0f"
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-
-    current_user = {"name": None}
-
-    # ---------- CHAT ----------
-    def open_chat(username: str):
-        page.clean()
-        current_user["name"] = username
-        online_users.add(username)
-
-        # Header: название + список онлайн + кнопка выйти
-        header = ft.Row(
-            [
-                ft.Text("Echoshade", size=20, weight="bold"),
-                ft.Text(f"Онлайн: {', '.join(sorted(online_users))}", size=14),
-                ft.Row([], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),  # placeholder для выравнивания
-                ft.ElevatedButton("Выйти", on_click=lambda e: do_logout(e, username))
-            ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            width=900
-        )
-
-        chat = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
-        message_input = ft.TextField(hint_text="Напишіть повідомлення...", expand=True)
-
-        def on_message(msg):
-            chat.controls.append(ft.Text(msg))
-            page.update()
-
-        page.pubsub.subscribe(on_message)
-
-        def send_click(e):
-            text = (message_input.value or "").strip()
-            if not text:
+        stored_user_id = self.page.session.get("user_id")
+        if stored_user_id:
+            user = get_user_by_id(int(stored_user_id))
+            if user:
+                self.state.user = user
+                self.state.profile = get_profile(user["id"])
+                settings = get_settings(user["id"])
+                self.state.theme = settings["theme"]
+                self.state.background = settings["background"]
+                self.state.language = settings["language"]
+                self.state.remember_me = bool(settings["remember_me"])
+                self.state.selected_channel_id = self._default_channel_id()
+                self.mark_online(user)
+                self.apply_theme()
+                self.render_chat()
                 return
-            sender = current_user["name"] or "Unknown"
-            page.pubsub.send_all(f"{sender}: {text}")
-            message_input.value = ""
-            page.update()
 
-        emoji_row = ft.Row(
-            [
-                ft.ElevatedButton("😀", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "😀"), message_input.focus(), page.update())),
-                ft.ElevatedButton("🔥", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "🔥"), message_input.focus(), page.update())),
-                ft.ElevatedButton("😂", on_click=lambda e: (message_input.__setattr__("value", (message_input.value or "") + "😂"), message_input.focus(), page.update())),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER
+        self.apply_theme()
+        self.render_auth()
+
+    def _default_channel_id(self) -> int | None:
+        channel = get_channel_by_name("general")
+        return channel["id"] if channel else None
+
+    def apply_theme(self) -> None:
+        self.page.theme = build_page_theme(self.state.theme)
+        self.page.theme_mode = ft.ThemeMode.DARK if self.state.theme == "dark" else ft.ThemeMode.LIGHT
+        self.page.update()
+
+    def render_auth(self) -> None:
+        self.page.clean()
+        self.page.add(build_auth_view(self))
+        self.page.update()
+
+    def render_chat(self) -> None:
+        if self.state.user is None:
+            self.render_auth()
+            return
+
+        if self.state.selected_channel_id is None:
+            self.state.selected_channel_id = self._default_channel_id()
+
+        self.page.clean()
+        self.page.add(build_chat_view(self))
+        self.page.update()
+
+    def set_theme(self, theme: str, rerender: bool = False) -> None:
+        if theme not in {"dark", "light"}:
+            return
+        self.state.theme = theme
+        if self.state.user:
+            save_settings(
+                self.state.user["id"],
+                theme=theme,
+                background=self.state.background,
+                language=self.state.language,
+                remember_me=self.state.remember_me,
+            )
+            upsert_profile(self.state.user["id"], theme=theme)
+        self.apply_theme()
+        if rerender:
+            self.render_auth() if self.state.user is None else self.render_chat()
+
+    def toggle_theme(self) -> None:
+        self.set_theme("light" if self.state.theme == "dark" else "dark", rerender=True)
+
+    def set_background(self, background: str, rerender: bool = False) -> None:
+        self.state.background = background
+        if self.state.user:
+            save_settings(
+                self.state.user["id"],
+                theme=self.state.theme,
+                background=background,
+                language=self.state.language,
+                remember_me=self.state.remember_me,
+            )
+            upsert_profile(self.state.user["id"], background=background)
+        if rerender:
+            self.render_auth() if self.state.user is None else self.render_chat()
+
+    def set_language(self, language: str, rerender: bool = False) -> None:
+        self.state.language = language
+        if self.state.user:
+            save_settings(
+                self.state.user["id"],
+                theme=self.state.theme,
+                background=self.state.background,
+                language=language,
+                remember_me=self.state.remember_me,
+            )
+            upsert_profile(self.state.user["id"], language=language)
+        if rerender:
+            self.render_auth() if self.state.user is None else self.render_chat()
+
+    def login(self, username: str, password: str, remember: bool = False) -> tuple[bool, str]:
+        username = normalize_username(username)
+        if not username or not password:
+            return False, "Введите логин и пароль"
+
+        if not is_valid_username(username):
+            return False, "Логин: 3–32 символа, только латиница, цифры, _, -, ."
+
+        ok_rate, retry_after = login_rate_limiter.check(username.lower())
+        if not ok_rate:
+            return False, f"Слишком много попыток. Повторите через {retry_after} сек."
+
+        ok, message, user = authenticate_user(username, password)
+        if not ok or not user:
+            return False, message
+
+        self.state.user = user
+        self.state.profile = get_profile(user["id"])
+        settings = get_settings(user["id"])
+        self.state.theme = settings["theme"]
+        self.state.background = settings["background"]
+        self.state.language = settings["language"]
+        self.state.remember_me = bool(remember)
+
+        save_settings(
+            user["id"],
+            theme=self.state.theme,
+            background=self.state.background,
+            language=self.state.language,
+            remember_me=remember,
         )
+        upsert_profile(user["id"], status_text="online")
+        self.mark_online(user)
+        self.page.session.set("user_id", user["id"])
+        self.apply_theme()
+        self.toast(f"Добро пожаловать, {user['username']}!")
+        return True, "OK"
 
-        page.add(
-            ft.Column([header, ft.Divider(), chat, emoji_row, ft.Row([message_input, ft.ElevatedButton("Надіслати", on_click=send_click)], alignment=ft.MainAxisAlignment.CENTER)], width=900)
-        )
+    def register(self, username: str, password: str, display_name: str | None = None) -> tuple[bool, str]:
+        username = normalize_username(username)
+        display_name = (display_name or "").strip() or None
 
-    def do_logout(e, username):
-        try:
-            online_users.discard(username)
-        except Exception:
-            pass
-        current_user["name"] = None
-        # уведомляем остальных, что пользователь вышел
-        page.pubsub.send_all(f"System: {username} вышел(а).")
-        show_auth()
+        if not username or not password:
+            return False, "Введите логин и пароль"
+        if not is_valid_username(username):
+            return False, "Логин: 3–32 символа, только латиница, цифры, _, -, ."
 
-    # ---------- AUTH / REGISTER UI ----------
-    username_field = ft.TextField(label="Имя пользователя", width=320)
-    password_field = ft.TextField(label="Пароль", password=True, can_reveal_password=True, width=320)
-    auth_error = ft.Text("", color="red")
-
-    reg_username = ft.TextField(label="Имя пользователя (регистрация)", width=320)
-    reg_password = ft.TextField(label="Пароль (регистрация)", password=True, can_reveal_password=True, width=320)
-    reg_error = ft.Text("", color="red")
-    reg_success = ft.Text("", color="green")
-
-    def do_login(e):
-        login = (username_field.value or "").strip()
-        pwd = (password_field.value or "").strip()
-        if not login or not pwd:
-            auth_error.value = "Введите логин и пароль"
-            page.update()
-            return
-        row = find_user(login)
-        if not row:
-            auth_error.value = "Пользователь не найден"
-            page.update()
-            return
-        _, uname, stored_hash = row
-        if not verify_password(pwd, stored_hash):
-            auth_error.value = "Неверный пароль"
-            page.update()
-            return
-        auth_error.value = ""
-        page.update()
-        # уведомляем остальных, что пользователь вошёл
-        page.pubsub.send_all(f"System: {login} вошёл(ла).")
-        open_chat(login)
-
-    def do_register(e):
-        login = (reg_username.value or "").strip()
-        pwd = (reg_password.value or "").strip()
-        ok, msg = create_user(login, pwd)
+        ok, message = create_user(username, password)
         if not ok:
-            reg_error.value = msg
-            reg_success.value = ""
-            page.update()
+            return False, message
+
+        user = authenticate_user(username, password)[2]
+        if user and display_name:
+            upsert_profile(user["id"], display_name=display_name)
+
+        return True, "Аккаунт создан. Теперь войдите."
+
+    def logout(self) -> None:
+        if self.state.user:
+            upsert_profile(self.state.user["id"], status_text="offline")
+            self.mark_offline(self.state.user)
+            self.page.session.remove("user_id")
+        self.state.user = None
+        self.state.profile = None
+        self.state.selected_channel_id = None
+        self.render_auth()
+
+    def mark_online(self, user: dict[str, Any]) -> None:
+        if self.state.online_users is None:
+            self.state.online_users = {}
+        self.state.online_users[user["id"]] = {
+            "id": user["id"],
+            "username": user["username"],
+            "role": user.get("role", "user"),
+        }
+
+    def mark_offline(self, user: dict[str, Any]) -> None:
+        if self.state.online_users is not None:
+            self.state.online_users.pop(user["id"], None)
+
+    def is_user_online(self, user_id: int | None) -> bool:
+        if user_id is None or self.state.online_users is None:
+            return False
+        return int(user_id) in self.state.online_users
+
+    def list_online_users(self) -> list[dict[str, Any]]:
+        if not self.state.online_users:
+            return []
+        return list(self.state.online_users.values())
+
+    def current_channel(self) -> dict[str, Any] | None:
+        if self.state.selected_channel_id is None:
+            return None
+        return get_channel(self.state.selected_channel_id)
+
+    def select_channel(self, channel_id: int) -> None:
+        self.state.selected_channel_id = channel_id
+        self.render_chat()
+
+    def send_current_message(self) -> None:
+        if not self.state.user:
             return
-        reg_error.value = ""
-        reg_success.value = "Регистрация успешна. Теперь войдите."
-        reg_username.value = ""
-        reg_password.value = ""
-        page.update()
+        if not self.state.selected_channel_id:
+            self.state.selected_channel_id = self._default_channel_id()
 
-    def show_auth():
-        page.clean()
-        username_field.value = ""
-        password_field.value = ""
-        auth_error.value = ""
-        reg_error.value = ""
-        reg_success.value = ""
+        if not self.page.controls:
+            return
 
-        auth_card = ft.Container(
+        textfield = self._find_message_input()
+        if textfield is None:
+            return
+
+        content = (textfield.value or "").strip()
+        if not content:
+            return
+
+        try:
+            create_message(self.state.selected_channel_id, self.state.user["id"], content)
+            textfield.value = ""
+            self.page.pubsub.send_all(
+                {
+                    "type": "refresh",
+                    "channel_id": self.state.selected_channel_id,
+                }
+            )
+            self.toast("Сообщение отправлено")
+            self.render_chat()
+        except Exception as exc:
+            logger.exception("Failed to send message")
+            self.toast(f"Ошибка отправки: {exc}")
+
+    def _find_message_input(self) -> ft.TextField | None:
+        # Current v1 rebuilds screen; locate by searching page controls is not reliable.
+        # We keep the method for compatibility; actual input control is handled by build_chat_view.
+        return getattr(self.state, "message_input", None)
+
+    def open_edit_dialog(self, msg: dict[str, Any]) -> None:
+        if not self.state.user:
+            return
+
+        value = msg["content"]
+
+        field = ft.TextField(value=value, multiline=True, min_lines=4, max_lines=8, autofocus=True)
+
+        def save(e):
+            ok, info = update_message(msg["id"], self.state.user["id"], field.value or "", is_admin=self.is_admin)
+            if ok:
+                dlg.open = False
+                self.page.update()
+                self.page.pubsub.send_all({"type": "refresh", "channel_id": msg["channel_id"]})
+                self.render_chat()
+                self.toast("Сообщение обновлено")
+            else:
+                self.toast(info)
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Edit message"),
+            content=field,
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(dlg)),
+                ft.FilledButton("Save", on_click=save),
+            ],
+        )
+        self.page.dialog = dlg
+        dlg.open = True
+        self.page.update()
+
+    def delete_message(self, message_id: int) -> None:
+        if not self.state.user:
+            return
+        ok, info = delete_message(message_id, self.state.user["id"], is_admin=self.is_admin)
+        if ok:
+            self.toast("Сообщение удалено")
+            self.page.pubsub.send_all({"type": "refresh", "channel_id": self.state.selected_channel_id})
+            self.render_chat()
+        else:
+            self.toast(info)
+
+    def toggle_pin(self, message_id: int) -> None:
+        if not self.state.user:
+            return
+        ok, info = pin_message(message_id, is_admin=self.is_admin, pinned=True)
+        if ok:
+            self.toast("Сообщение закреплено")
+            self.page.pubsub.send_all({"type": "refresh", "channel_id": self.state.selected_channel_id})
+            self.render_chat()
+        else:
+            self.toast(info)
+
+    def open_create_channel_dialog(self) -> None:
+        if not self.state.user:
+            return
+
+        name_field = ft.TextField(label="Channel name", autofocus=True)
+
+        def create(e):
+            ok, info = create_channel(name_field.value or "", created_by=self.state.user["id"], is_private=False)
+            if ok:
+                dlg.open = False
+                self.page.update()
+                self.toast("Канал создан")
+                self.render_chat()
+            else:
+                self.toast(info)
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("New channel"),
+            content=name_field,
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(dlg)),
+                ft.FilledButton("Create", on_click=create),
+            ],
+        )
+        self.page.dialog = dlg
+        dlg.open = True
+        self.page.update()
+
+    def open_emoji_picker(self) -> None:
+        if not self.state.user:
+            return
+
+        emojis = ["😀", "🔥", "😂", "👍", "💡", "🎉", "❤️", "✨"]
+
+        def insert_emoji(emoji: str) -> None:
+            field = getattr(self.state, "message_input", None)
+            if field is None:
+                self.toast(emoji)
+                return
+            field.value = (field.value or "") + emoji
+            self.page.update()
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Emoji"),
+            content=ft.Container(
+                width=320,
+                content=ft.Wrap(
+                    spacing=8,
+                    run_spacing=8,
+                    children=[
+                        ft.ElevatedButton(e, on_click=lambda ev, em=e: (insert_emoji(em), self._close_dialog(dlg))) for e in emojis
+                    ],
+                ),
+            ),
+            actions=[ft.TextButton("Close", on_click=lambda e: self._close_dialog(dlg))],
+        )
+        self.page.dialog = dlg
+        dlg.open = True
+        self.page.update()
+
+    def open_settings_dialog(self) -> None:
+        if not self.state.user:
+            return
+
+        profile = self.state.profile or get_profile(self.state.user["id"]) or {}
+        display_name = ft.TextField(label="Display name", value=profile.get("display_name") or self.state.user["username"])
+        bio = ft.TextField(label="Bio", value=profile.get("bio") or "", multiline=True, min_lines=3, max_lines=6)
+        theme = ft.Dropdown(
+            label="Theme",
+            value=self.state.theme,
+            options=[ft.dropdown.Option("dark"), ft.dropdown.Option("light")],
+        )
+        background = ft.Dropdown(
+            label="Background",
+            value=self.state.background,
+            options=[
+                ft.dropdown.Option("aurora"),
+                ft.dropdown.Option("midnight"),
+                ft.dropdown.Option("sunset"),
+                ft.dropdown.Option("paper"),
+            ],
+        )
+        language = ft.Dropdown(
+            label="Language",
+            value=self.state.language,
+            options=[
+                ft.dropdown.Option("ru", "Русский"),
+                ft.dropdown.Option("en", "English"),
+                ft.dropdown.Option("uk", "Українська"),
+            ],
+        )
+
+        def save(e):
+            upsert_profile(
+                self.state.user["id"],
+                display_name=display_name.value,
+                bio=bio.value,
+                theme=theme.value,
+                background=background.value,
+                language=language.value,
+                status_text="online",
+            )
+            save_settings(
+                self.state.user["id"],
+                theme=theme.value,
+                background=background.value,
+                language=language.value,
+                remember_me=self.state.remember_me,
+            )
+            self.state.profile = get_profile(self.state.user["id"])
+            self.state.theme = theme.value
+            self.state.background = background.value
+            self.state.language = language.value
+            self.apply_theme()
+            dlg.open = False
+            self.page.update()
+            self.render_chat()
+            self.toast("Настройки сохранены")
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Profile settings"),
+            content=ft.Container(
+                width=420,
+                content=ft.Column(
+                    [display_name, bio, theme, background, language],
+                    tight=True,
+                    spacing=10,
+                ),
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(dlg)),
+                ft.FilledButton("Save", on_click=save),
+            ],
+        )
+        self.page.dialog = dlg
+        dlg.open = True
+        self.page.update()
+
+    def open_admin_panel(self) -> None:
+        if not self.is_admin:
+            self.toast("Недостаточно прав")
+            return
+
+        stats = {
+            "users": len([]),
+        }
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Admin panel"),
             content=ft.Column(
                 [
-                    ft.Text("Echoshade", size=28, weight="bold"),
-                    ft.Text("Вход", size=16),
-                    username_field,
-                    password_field,
-                    ft.Row([ft.ElevatedButton("Войти", on_click=do_login)], alignment=ft.MainAxisAlignment.CENTER),
-                    auth_error,
-                    ft.Divider(height=20),
-                    ft.Text("Регистрация", size=16),
-                    reg_username,
-                    reg_password,
-                    ft.Row([ft.ElevatedButton("Зарегистрироваться", on_click=do_register)], alignment=ft.MainAxisAlignment.CENTER),
-                    reg_error,
-                    reg_success
+                    ft.Text("Logicord admin dashboard"),
+                    ft.Text(f"Current user: {self.state.user['username']}"),
+                    ft.Text("Moderation actions can be extended here."),
                 ],
-                spacing=10,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                tight=True,
             ),
-            padding=24,
-            width=420,
-            bgcolor="#181818",
-            border_radius=12
+            actions=[ft.TextButton("Close", on_click=lambda e: self._close_dialog(dlg))],
         )
+        self.page.dialog = dlg
+        dlg.open = True
+        self.page.update()
 
-        page.add(ft.Column([auth_card], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER))
+    def _close_dialog(self, dlg: ft.AlertDialog) -> None:
+        dlg.open = False
+        self.page.update()
 
-    # старт
-    show_auth()
+    def _on_pubsub(self, data) -> None:
+        if isinstance(data, dict) and data.get("type") == "refresh":
+            if self.state.user and data.get("channel_id") == self.state.selected_channel_id:
+                self.render_chat()
+
+
+def main(page: ft.Page):
+    init_db()
+    app = LogicordApp(page)
+    app.init_session()
+
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8550"))
-    # Render требует 0.0.0.0
+    port = int(__import__("os").environ.get("PORT", "8550"))
     ft.app(target=main, view=ft.AppView.WEB_BROWSER, host="0.0.0.0", port=port)
