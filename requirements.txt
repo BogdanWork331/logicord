@@ -1,3 +1,4 @@
 flet==0.85.3
-bcrypt==4.2.1
-markdown==3.8.2
+bcrypt
+cffi
+wheel
