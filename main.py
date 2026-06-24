@@ -373,7 +373,7 @@ class LogicordApp:
                     width=72,
                     height=72,
                     border_radius=20,
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment(0, 0),
                     bgcolor=p["accent"],
                     content=ft.Text("L", size=30, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
                 ),
@@ -553,7 +553,7 @@ class LogicordApp:
 
         return ft.Container(
             width=520,
-            alignment=ft.alignment.center_right if own else ft.alignment.center_left,
+            alignment=ft.Alignment(1, 0) if own else ft.Alignment(-1, 0),
             content=ft.Container(
                 padding=12,
                 border_radius=18,
@@ -587,7 +587,7 @@ class LogicordApp:
                                 width=44,
                                 height=44,
                                 border_radius=14,
-                                alignment=ft.alignment.center,
+                                alignment=ft.Alignment(0, 0),
                                 bgcolor=p["accent"],
                                 content=ft.Text("L", color=ft.colors.WHITE, weight=ft.FontWeight.BOLD),
                             ),
