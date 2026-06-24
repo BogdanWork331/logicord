@@ -375,7 +375,7 @@ class LogicordApp:
                     border_radius=20,
                     alignment=ft.Alignment(0, 0),
                     bgcolor=p["accent"],
-                    content=ft.Text("L", size=30, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
+                    content=ft.Text("L", size=30, weight=ft.FontWeight.BOLD, color="white"),
                 ),
                 ft.Text(APP_NAME, size=30, weight=ft.FontWeight.BOLD, color=p["text"]),
                 ft.Text("Простой и быстрый чат", size=13, color=p["muted"]),
@@ -536,7 +536,7 @@ class LogicordApp:
         p = self.palette()
         own = self.state.user and msg["user_id"] == self.state.user["id"]
         bubble_bg = p["bubble_self"] if own else p["bubble_other"]
-        text_color = ft.colors.WHITE if own else p["text"]
+        text_color = "white" if own else p["text"]
 
         header = ft.Row(
             [
@@ -589,7 +589,7 @@ class LogicordApp:
                                 border_radius=14,
                                 alignment=ft.Alignment(0, 0),
                                 bgcolor=p["accent"],
-                                content=ft.Text("L", color=ft.colors.WHITE, weight=ft.FontWeight.BOLD),
+                                content=ft.Text("L", color="white", weight=ft.FontWeight.BOLD),
                             ),
                             ft.Column(
                                 [
@@ -684,7 +684,7 @@ class LogicordApp:
                     ft.Row(
                         [
                             ft.IconButton(
-                                icon=ft.icons.EMOJI_EMOTIONS,
+                                icon=ft.Icons.EMOJI_EMOTIONS,
                                 tooltip="Эмодзи",
                                 on_click=lambda e: self.toggle_emoji_panel(),
                             ),
