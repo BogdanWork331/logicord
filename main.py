@@ -11,8 +11,6 @@ from database import (
     authenticate_user,
     create_user,
     get_profile,
-    get_user_by_id,
-    get_settings,
     init_db,
     list_all_users,
     save_settings,
@@ -152,18 +150,18 @@ class LogicordApp:
     def login(self, username: str, password: str, remember: bool) -> None:
         username = normalize_username(username)
         if not username or not password:
-            self.state.error = "Введите логин и пароль"
+            self.state.error = "Введіть логін і пароль"
             self.render()
             return
 
         if not is_valid_username(username):
-            self.state.error = "Логин: 3–32 символа, только латиница, цифры, _, -, ."
+            self.state.error = "Логін: 3–32 символи, тільки латиница, цифри, _, -, ."
             self.render()
             return
 
         allowed, retry_after = login_limiter.check(username.lower())
         if not allowed:
-            self.state.error = f"Слишком много попыток. Повторите через {retry_after} сек."
+            self.state.error = f"Дуже багато спроб. Спробуйте через {retry_after} сек."
             self.render()
             return
 
@@ -192,7 +190,7 @@ class LogicordApp:
 
         save_settings(user["id"], remember_me=remember)
         self.state.error = ""
-        self.state.success = "Успешный вход"
+        self.state.success = "Успішний вхід"
         self.apply_theme()
         self.render()
 
@@ -202,12 +200,12 @@ class LogicordApp:
         avatar = (avatar or "😀").strip()[:4] or "😀"
 
         if not username or not password:
-            self.state.error = "Введите логин и пароль"
+            self.state.error = "Введіть логін і пароль"
             self.render()
             return
 
         if not is_valid_username(username):
-            self.state.error = "Логин: 3–32 символа, только латиница, цифры, _, -, ."
+            self.state.error = "Логін: 3–32 символи, тільки латиница, цифри, _, -, ."
             self.render()
             return
 
@@ -218,7 +216,7 @@ class LogicordApp:
             return
 
         self.state.error = ""
-        self.state.success = "Аккаунт создан. Теперь войдите."
+        self.state.success = "Аккаунт створено. Тепер увійдіть."
         self.state.mode = "login"
         self.render()
 
@@ -267,7 +265,7 @@ class LogicordApp:
 
         profile = self.state.profile or get_profile(self.state.user["id"]) or {}
         display_name_field = ft.TextField(
-            label="Имя в чате",
+            label="Ім'я в чаті",
             value=profile.get("display_name") or self.state.user["username"],
             width=320,
         )
@@ -278,7 +276,7 @@ class LogicordApp:
             options=[ft.dropdown.Option(a) for a in AVATARS],
         )
         bio_field = ft.TextField(
-            label="О себе",
+            label="Про мене",
             value=profile.get("bio") or "",
             multiline=True,
             min_lines=3,
@@ -302,13 +300,13 @@ class LogicordApp:
             )
             self.state.profile = get_profile(self.state.user["id"])
             self.set_theme(theme_dd.value)
-            self.snack("Профиль сохранён")
+            self.snack("Профіль оновлено")
             dlg.open = False
             self.page.update()
 
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Профиль"),
+            title=ft.Text("Профіль"),
             content=ft.Container(
                 width=360,
                 content=ft.Column(
@@ -318,8 +316,8 @@ class LogicordApp:
                 ),
             ),
             actions=[
-                ft.TextButton("Отмена", on_click=lambda e: self.close_dialog(dlg)),
-                ft.FilledButton("Сохранить", on_click=save),
+                ft.TextButton("Відміна", on_click=lambda e: self.close_dialog(dlg)),
+                ft.FilledButton("Зберегти", on_click=save),
             ],
         )
         self.page.dialog = dlg
@@ -363,7 +361,7 @@ class LogicordApp:
             self.page.add(self.build_auth())
 
         self.page.update()
-
+#МЕНЮ АВТОРІЗАЦІІ!!! -----------------------------------------
     def build_auth(self) -> ft.Control:
         p = self.palette()
 
@@ -375,10 +373,10 @@ class LogicordApp:
                     border_radius=20,
                     alignment=ft.Alignment(0, 0),
                     bgcolor=p["accent"],
-                    content=ft.Text("L", size=30, weight=ft.FontWeight.BOLD, color="white"),
+                    content=ft.Text("LoGi", size=30, weight=ft.FontWeight.BOLD, color="white"),
                 ),
                 ft.Text(APP_NAME, size=30, weight=ft.FontWeight.BOLD, color=p["text"]),
-                ft.Text("Простой и быстрый чат", size=13, color=p["muted"]),
+                ft.Text("Найкращий чат(кращий ніж у MAX точно)", size=13, color=p["muted"]),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=10,
@@ -393,10 +391,11 @@ class LogicordApp:
                 [
                     title,
                     ft.Container(height=8),
-                    ft.Text("• Лёгкий интерфейс", color=p["text"]),
-                    ft.Text("• Быстрая регистрация", color=p["text"]),
-                    ft.Text("• Эмодзи-меню", color=p["text"]),
-                    ft.Text("• Тёмные акцентные темы", color=p["text"]),
+                    ft.Text("• Гнучкий інтерфейс", color=p["text"]),
+                    ft.Text("• Швидка реєстрація", color=p["text"]),
+                    ft.Text("• Багато функцій", color=p["text"]),
+                    ft.Text("• Гнучкість налаштування", color=p["text"]),
+                    ft.Text("• Темні акцентні теми", color=p["text"]),
                     ft.Container(height=16),
                     ft.Row(
                         [
@@ -413,12 +412,12 @@ class LogicordApp:
             ),
         )
 
-        login_username = ft.TextField(label="Логин", width=320)
+        login_username = ft.TextField(label="Логін", width=320)
         login_password = ft.TextField(label="Пароль", width=320, password=True, can_reveal_password=True)
-        login_remember = ft.Checkbox(label="Запомнить меня", value=True)
+        login_remember = ft.Checkbox(label="Запам'ятати мене", value=True)
 
-        reg_username = ft.TextField(label="Логин", width=320)
-        reg_display_name = ft.TextField(label="Имя в чате", width=320)
+        reg_username = ft.TextField(label="Логін", width=320)
+        reg_display_name = ft.TextField(label="Ім'я в чаті", width=320)
         reg_password = ft.TextField(label="Пароль", width=320, password=True, can_reveal_password=True)
         reg_avatar = ft.Dropdown(
             label="Аватар",
@@ -445,21 +444,21 @@ class LogicordApp:
 
         login_form = ft.Column(
             [
-                ft.Text("Вход", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
+                ft.Text("Вхід", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
                 login_username,
                 login_password,
                 login_remember,
                 ft.Row(
                     [
                         ft.FilledButton(
-                            "Войти",
+                            "Ввійти",
                             on_click=lambda e: self.login(
                                 login_username.value,
                                 login_password.value,
                                 login_remember.value,
                             ),
                         ),
-                        ft.TextButton("Регистрация", on_click=lambda e: self.toggle_mode("register")),
+                        ft.TextButton("Реєстрація", on_click=lambda e: self.toggle_mode("register")),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
@@ -470,7 +469,7 @@ class LogicordApp:
 
         register_form = ft.Column(
             [
-                ft.Text("Регистрация", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
+                ft.Text("Реєстрація", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
                 reg_username,
                 reg_display_name,
                 reg_password,
@@ -478,7 +477,7 @@ class LogicordApp:
                 ft.Row(
                     [
                         ft.FilledButton(
-                            "Создать аккаунт",
+                            "Створити обліковий запис",
                             on_click=lambda e: self.register(
                                 reg_username.value,
                                 reg_password.value,
@@ -486,7 +485,7 @@ class LogicordApp:
                                 reg_avatar.value,
                             ),
                         ),
-                        ft.TextButton("Вход", on_click=lambda e: self.toggle_mode("login")),
+                        ft.TextButton("Вхід", on_click=lambda e: self.toggle_mode("login")),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
@@ -505,8 +504,8 @@ class LogicordApp:
                 [
                     ft.Row(
                         [
-                            ft.OutlinedButton("Вход", on_click=lambda e: self.toggle_mode("login")),
-                            ft.OutlinedButton("Регистрация", on_click=lambda e: self.toggle_mode("register")),
+                            ft.OutlinedButton("Вхід", on_click=lambda e: self.toggle_mode("login")),
+                            ft.OutlinedButton("Реєстрація", on_click=lambda e: self.toggle_mode("register")),
                         ],
                         alignment=ft.MainAxisAlignment.START,
                     ),
@@ -531,6 +530,7 @@ class LogicordApp:
                 spacing=20,
             ),
         )
+#МЕНЮ АВТОРІЗАЦІІ!!! -----------------------------------------
 
     def build_message(self, msg: dict[str, Any]) -> ft.Control:
         p = self.palette()
@@ -605,9 +605,9 @@ class LogicordApp:
                     ft.Divider(height=10, color=p["stroke"]),
                     ft.Text("Меню", size=12, color=p["muted"]),
                     ft.TextButton("💬 Чат", on_click=lambda e: None),
-                    ft.TextButton("👤 Профиль", on_click=lambda e: self.open_profile()),
+                    ft.TextButton("👤 Профіль", on_click=lambda e: self.open_profile()),
                     ft.TextButton("🎨 Тема", on_click=lambda e: self.open_theme_menu()),
-                    ft.TextButton("🚪 Выйти", on_click=lambda e: self.logout()),
+                    ft.TextButton("🚪 Вийти", on_click=lambda e: self.logout()),
                     ft.Divider(height=10, color=p["stroke"]),
                     ft.Text("Онлайн", size=12, color=p["muted"]),
                     *[
@@ -640,7 +640,7 @@ class LogicordApp:
         )
 
         self.state.message_field = ft.TextField(
-            hint_text="Напишите сообщение...",
+            hint_text="Введіть повідомлення...",
             expand=True,
             on_submit=lambda e: self.send_message(),
         )
@@ -686,11 +686,11 @@ class LogicordApp:
                         [
                             ft.IconButton(
                                 icon=ft.Icons.EMOJI_EMOTIONS,
-                                tooltip="Эмодзи",
+                                tooltip="Эмодзі",
                                 on_click=lambda e: self.toggle_emoji_panel(),
                             ),
                             self.state.message_field,
-                            ft.FilledButton("Отправить", on_click=lambda e: self.send_message()),
+                            ft.FilledButton("Відправити", on_click=lambda e: self.send_message()),
                         ],
                         spacing=10,
                         vertical_alignment=ft.CrossAxisAlignment.END,
@@ -715,7 +715,7 @@ class LogicordApp:
                             ft.Column(
                                 [
                                     ft.Text("Чат", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
-                                    ft.Text("Один общий канал", size=11, color=p["muted"]),
+                                    ft.Text("Один загальний канал", size=11, color=p["muted"]),
                                 ],
                                 spacing=0,
                                 tight=True,
@@ -741,7 +741,7 @@ class LogicordApp:
             border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
-                    ft.Text("Профиль", size=12, color=p["muted"]),
+                    ft.Text("Профіль", size=12, color=p["muted"]),
                     ft.Container(
                         padding=12,
                         border_radius=16,
@@ -760,14 +760,14 @@ class LogicordApp:
                                     color=p["muted"],
                                     size=11,
                                 ),
-                                ft.TextButton("Изменить", on_click=lambda e: self.open_profile()),
+                                ft.TextButton("Змінити", on_click=lambda e: self.open_profile()),
                             ],
                             spacing=4,
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                     ),
                     ft.Divider(height=10, color=p["stroke"]),
-                    ft.Text("Темы", size=12, color=p["muted"]),
+                    ft.Text("Теми", size=12, color=p["muted"]),
                     ft.Row(
                         [
                             ft.OutlinedButton("Dark", on_click=lambda e: self.set_theme("dark")),
@@ -777,7 +777,7 @@ class LogicordApp:
                         wrap=True,
                     ),
                     ft.Divider(height=10, color=p["stroke"]),
-                    ft.Text("Все пользователи", size=12, color=p["muted"]),
+                    ft.Text("Всі користувачі", size=12, color=p["muted"]),
                     *[
                         ft.Container(
                             padding=8,
