@@ -75,11 +75,11 @@ def create_user(
     avatar = (avatar or "😀").strip()[:4] or "😀"
 
     if not username or not password:
-        return False, "Введите логин и пароль"
+        return False, "Введіть логін та пароль"
     if not is_valid_username(username):
-        return False, "Логин: 3–32 символа, только латиница, цифры, _, -, ."
+        return False, "Логін: 3–32 символа, тільки латиниця, цифри, _, -, ."
     if len(password) < 6:
-        return False, "Пароль должен быть минимум 6 символов"
+        return False, "Пароль повинен бути мінімум 6 символів"
 
     try:
         pwd_hash = hash_password(password)
@@ -106,11 +106,11 @@ def create_user(
                 """,
                 (user_id,),
             )
-        return True, "Аккаунт создан"
+        return True, "Аккаунт створено"
     except sqlite3.IntegrityError:
-        return False, "Пользователь уже существует"
+        return False, "Користувач вже існує"
     except Exception as exc:
-        return False, f"Ошибка регистрации: {exc}"
+        return False, f"Помилка реєстрації: {exc}"
 
 
 def get_user_by_username(username: str) -> dict[str, Any] | None:
@@ -128,9 +128,9 @@ def get_user_by_id(user_id: int) -> dict[str, Any] | None:
 def authenticate_user(username: str, password: str) -> tuple[bool, str, dict[str, Any] | None]:
     user = get_user_by_username(username)
     if not user:
-        return False, "Пользователь не найден", None
+        return False, "Користувач не знайдений", None
     if not verify_password(password, user["password_hash"]):
-        return False, "Неверный пароль", None
+        return False, "Невірний пароль", None
     return True, "OK", user
 
 
