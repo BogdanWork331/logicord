@@ -383,14 +383,14 @@ class LogicordApp:
         )
         return self.profile_name
 
-    def append_message(self, msg: dict[str, Any]) -> None:
+    def append_message(self, msg: dict[str, Any], force_scroll: bool = False) -> None:
         if not self.messages_column or not self.state.user:
             return
         self.messages_column.controls.append(self.build_message(msg))
         if len(self.messages_column.controls) > 70:
             del self.messages_column.controls[0]
         self.messages_column.update()
-        if self.messages_at_bottom:
+        if force_scroll or self.messages_at_bottom:
             self.messages_column.scroll_to(offset=-1, duration=120)
         self.page.update()
 
@@ -896,7 +896,12 @@ def main(page: ft.Page):
         if not isinstance(data, dict):
             return
         if data.get("type") == "message":
-            app.append_message(data.get("message") or {})
+            message = data.get("message") or {}
+            own_message = bool(
+                app.state.user
+                and message.get("user_id") == app.state.user["id"]
+            )
+            app.append_message(message, force_scroll=own_message)
         elif data.get("type") == "presence":
             users = data.get("users") or []
             ONLINE_USERS.clear()
