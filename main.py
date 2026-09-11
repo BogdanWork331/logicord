@@ -713,7 +713,13 @@ class LogicordApp:
 
         self.state.message_field = ft.TextField(
             hint_text="Введіть повідомлення...",
+            height=64,
             expand=True,
+            multiline=True,
+            min_lines=2,
+            max_lines=3,
+            text_size=16,
+            content_padding=ft.Padding(14, 10, 14, 10),
             on_submit=lambda e: self.send_message(),
         )
 
