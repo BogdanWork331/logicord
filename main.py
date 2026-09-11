@@ -235,6 +235,7 @@ class LogicordApp:
 
         message = push_message(self.state.user, text, self.state.profile)
         self.state.message_field.value = ""
+        self.state.message_field.update()
         self.page.pubsub.send_all({"type": "message", "message": message})
 
     def add_emoji(self, emoji: str) -> None:
@@ -393,8 +394,8 @@ class LogicordApp:
         self.messages_column.auto_scroll = True
         self.messages_column.scroll_to(
             offset=-1,
-            duration=180,
-            curve=ft.AnimationCurve.EASE_OUT,
+            duration=90,
+            curve=ft.AnimationCurve.LINEAR,
         )
 
     def append_message(self, msg: dict[str, Any], force_scroll: bool = False) -> None:
@@ -407,7 +408,6 @@ class LogicordApp:
             del self.messages_column.controls[0]
         self.messages_column.auto_scroll = should_scroll
         self.messages_column.update()
-        self.page.update()
         if should_scroll:
             self.scroll_to_latest(force=True)
         else:
