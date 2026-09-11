@@ -384,13 +384,20 @@ class LogicordApp:
     def append_message(self, msg: dict[str, Any], force_scroll: bool = False) -> None:
         if not self.messages_column or not self.state.user:
             return
+
+        should_scroll = force_scroll or self.messages_at_bottom
         self.messages_column.controls.append(self.build_message(msg))
         if len(self.messages_column.controls) > 70:
             del self.messages_column.controls[0]
         self.messages_column.update()
-        if force_scroll or self.messages_at_bottom:
-            self.messages_column.scroll_to(offset=-1, duration=120)
         self.page.update()
+        if should_scroll:
+            self.messages_at_bottom = True
+            self.messages_column.scroll_to(
+                offset=-1,
+                duration=180,
+                curve=ft.AnimationCurve.EASE_OUT,
+            )
 
     def on_messages_scroll(self, event: ft.OnScrollEvent) -> None:
         self.messages_scroll_position = event.pixels
