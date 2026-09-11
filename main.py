@@ -120,9 +120,10 @@ class LogicordApp:
                 self.state.message_field.update()
             self.messages_at_bottom = was_at_bottom
             if self.messages_column:
-                self.messages_column.scroll_to(
-                    offset=-1 if was_at_bottom else scroll_position,
-                )
+                if was_at_bottom:
+                    self.scroll_to_latest(force=True)
+                else:
+                    self.messages_column.scroll_to(offset=scroll_position)
             if self.emoji_panel:
                 self.emoji_panel.visible = emoji_open
         self.page.update()
@@ -253,7 +254,7 @@ class LogicordApp:
             self.composer.update()
         self.page.update()
         if was_at_bottom and self.messages_column:
-            self.messages_column.scroll_to(offset=-1, duration=120)
+            self.scroll_to_latest()
 
     def open_profile(self) -> None:
         if not self.state.user:
@@ -381,6 +382,16 @@ class LogicordApp:
         )
         return self.profile_name
 
+    def scroll_to_latest(self, force: bool = False) -> None:
+        if not self.messages_column or (not force and not self.messages_at_bottom):
+            return
+        self.messages_at_bottom = True
+        self.messages_column.scroll_to(
+            offset=-1,
+            duration=180,
+            curve=ft.AnimationCurve.EASE_OUT,
+        )
+
     def append_message(self, msg: dict[str, Any], force_scroll: bool = False) -> None:
         if not self.messages_column or not self.state.user:
             return
@@ -392,12 +403,7 @@ class LogicordApp:
         self.messages_column.update()
         self.page.update()
         if should_scroll:
-            self.messages_at_bottom = True
-            self.messages_column.scroll_to(
-                offset=-1,
-                duration=180,
-                curve=ft.AnimationCurve.EASE_OUT,
-            )
+            self.scroll_to_latest(force=True)
 
     def on_messages_scroll(self, event: ft.OnScrollEvent) -> None:
         self.messages_scroll_position = event.pixels
@@ -446,7 +452,7 @@ class LogicordApp:
 
         self.page.update()
         if self.state.user and self.messages_column:
-            self.messages_column.scroll_to(offset=-1)
+            self.scroll_to_latest(force=True)
 #МЕНЮ АВТОРІЗАЦІІ!!! -----------------------------------------
     def build_auth(self) -> ft.Control:
         p = self.palette()
@@ -462,7 +468,7 @@ class LogicordApp:
                     content=ft.Text("LoGi", size=30, weight=ft.FontWeight.BOLD, color="white"),
                 ),
                 ft.Text(APP_NAME, size=30, weight=ft.FontWeight.BOLD, color=p["text"]),
-                ft.Text("Найкращий чат(кращий ніж у MAX точно)", size=13, color=p["muted"]),
+                ft.Text("Найкращий чат(кращий ніж MAX точно)", size=13, color=p["muted"]),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=10,
@@ -781,7 +787,7 @@ class LogicordApp:
         )
 
         chat_area = ft.Container(
-            height=640,
+            height=720,
             expand=True,
             padding=16,
             border_radius=24,
@@ -904,7 +910,7 @@ def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
     page.window_min_width = 980
-    page.window_min_height = 680
+    page.window_min_height = 780
     page.scroll = None
 
     app = LogicordApp(page)
