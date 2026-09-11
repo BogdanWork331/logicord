@@ -385,9 +385,11 @@ class LogicordApp:
     def scroll_to_latest(self, force: bool = False) -> None:
         if not self.messages_column or (not force and not self.messages_at_bottom):
             return
+        if not self.messages_column.controls:
+            return
         self.messages_at_bottom = True
         self.messages_column.scroll_to(
-            offset=-1,
+            scroll_key=self.messages_column.controls[-1].key,
             duration=180,
             curve=ft.AnimationCurve.EASE_OUT,
         )
@@ -646,6 +648,7 @@ class LogicordApp:
         )
 
         return ft.Container(
+            key=f"message-{msg['id']}",
             width=520,
             alignment=ft.Alignment(1, 0) if own else ft.Alignment(-1, 0),
             content=ft.Container(
@@ -787,7 +790,6 @@ class LogicordApp:
         )
 
         chat_area = ft.Container(
-            height=720,
             expand=True,
             padding=16,
             border_radius=24,
