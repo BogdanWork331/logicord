@@ -73,6 +73,11 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 text TEXT NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'text',
+                file_name TEXT,
+                file_path TEXT,
+                file_url TEXT,
+                file_data BLOB,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
@@ -80,6 +85,18 @@ def init_db() -> None:
                 ON messages(created_at, id);
             """
         )
+        message_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(messages)")
+        }
+        for name, definition in (
+            ("kind", "TEXT NOT NULL DEFAULT 'text'"),
+            ("file_name", "TEXT"),
+            ("file_path", "TEXT"),
+            ("file_url", "TEXT"),
+            ("file_data", "BLOB"),
+        ):
+            if name not in message_columns:
+                conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {definition}")
 
 
 def create_user(
@@ -159,11 +176,23 @@ def get_profile(user_id: int) -> dict[str, Any] | None:
         return row_to_dict(cur.fetchone())
 
 
-def add_message(user_id: int, text: str) -> dict[str, Any]:
+def add_message(
+    user_id: int,
+    text: str,
+    kind: str = "text",
+    file_name: str | None = None,
+    file_path: str | None = None,
+    file_url: str | None = None,
+    file_data: bytes | None = None,
+) -> dict[str, Any]:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO messages (user_id, text, created_at) VALUES (?, ?, ?)",
-            (user_id, text, utc_now()),
+            """
+            INSERT INTO messages
+                (user_id, text, kind, file_name, file_path, file_url, file_data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, text, kind, file_name, file_path, file_url, file_data, utc_now()),
         )
         message_id = cur.lastrowid
         row = conn.execute(
@@ -171,7 +200,8 @@ def add_message(user_id: int, text: str) -> dict[str, Any]:
             SELECT m.id, m.user_id, u.username,
                    COALESCE(p.display_name, u.username) AS display_name,
                    COALESCE(p.avatar, '😀') AS avatar,
-                   m.text, strftime('%H:%M', m.created_at) AS time
+                   m.text, m.kind, m.file_name, m.file_path, m.file_url, m.file_data,
+                   strftime('%H:%M', m.created_at) AS time
             FROM messages m
             JOIN users u ON u.id = m.user_id
             LEFT JOIN profiles p ON p.user_id = m.user_id
@@ -190,7 +220,8 @@ def get_recent_messages(limit: int = 70) -> list[dict[str, Any]]:
             SELECT m.id, m.user_id, u.username,
                    COALESCE(p.display_name, u.username) AS display_name,
                    COALESCE(p.avatar, '😀') AS avatar,
-                   m.text, strftime('%H:%M', m.created_at) AS time
+                   m.text, m.kind, m.file_name, m.file_path, m.file_url, m.file_data,
+                   strftime('%H:%M', m.created_at) AS time
             FROM messages m
             JOIN users u ON u.id = m.user_id
             LEFT JOIN profiles p ON p.user_id = m.user_id

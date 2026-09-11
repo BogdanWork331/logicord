@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import mimetypes
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -39,9 +41,16 @@ def theme_palette(name: str) -> dict[str, str]:
     return THEMES.get(name, THEMES["dark"])
 
 
-def push_message(author: dict[str, Any], text: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
-    profile = profile or {}
-    return add_message(author["id"], text)
+MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
+
+
+def push_message(
+    author: dict[str, Any],
+    text: str,
+    profile: dict[str, Any] | None = None,
+    **attachment: Any,
+) -> dict[str, Any]:
+    return add_message(author["id"], text, **attachment)
 
 
 @dataclass
@@ -70,6 +79,7 @@ class LogicordApp:
         self.composer: ft.Container | None = None
         self.messages_scroll_position = 0.0
         self._scrolling_to_latest = False
+        self.file_picker = ft.FilePicker()
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -233,10 +243,95 @@ class LogicordApp:
         if not text:
             return
 
+        if self.send_image_url(text):
+            self.state.message_field.value = ""
+            self.state.message_field.update()
+            return
+
         message = push_message(self.state.user, text, self.state.profile)
         self.state.message_field.value = ""
         self.state.message_field.update()
         self.page.pubsub.send_all({"type": "message", "message": message})
+
+    def _message_kind(self, file_name: str, content_type: str | None = None) -> str:
+        mime = content_type or mimetypes.guess_type(file_name)[0] or ""
+        if mime.startswith("image/"):
+            return "image"
+        if mime.startswith("video/"):
+            return "video"
+        return "file"
+
+    def _send_attachment(self, file_name: str, data: bytes | None, path: str | None = None) -> None:
+        if not self.state.user:
+            return
+        if data and len(data) > MAX_ATTACHMENT_BYTES:
+            self.snack("Файл завеликий (максимум 8 MB)")
+            return
+        kind = self._message_kind(file_name)
+        message = push_message(
+            self.state.user,
+            "",
+            self.state.profile,
+            kind=kind,
+            file_name=file_name,
+            file_path=path,
+            file_data=data,
+        )
+        self.page.pubsub.send_all({"type": "message", "message": message})
+
+    def choose_files(self, e: ft.ControlEvent | None = None) -> None:
+        files = self.file_picker.pick_files(
+            dialog_title="Виберіть файли",
+            allow_multiple=True,
+            with_data=True,
+        )
+        for file in files or []:
+            self._send_attachment(file.name, file.bytes, file.path)
+
+    def send_image_url(self, url: str) -> bool:
+        if not url.lower().startswith(("http://", "https://")):
+            return False
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "Logicord/1.0"})
+            with urllib.request.urlopen(request, timeout=5) as response:
+                content_type = response.headers.get_content_type()
+                if not content_type.startswith("image/"):
+                    return False
+                data = response.read(MAX_ATTACHMENT_BYTES + 1)
+            if len(data) > MAX_ATTACHMENT_BYTES:
+                self.snack("Зображення завелике (максимум 8 MB)")
+                return True
+        except Exception:
+            return False
+        name = os.path.basename(url.split("?", 1)[0]) or "image"
+        message = push_message(
+            self.state.user,
+            "",
+            self.state.profile,
+            kind="image",
+            file_name=name,
+            file_url=url,
+            file_data=data,
+        )
+        self.page.pubsub.send_all({"type": "message", "message": message})
+        return True
+
+    def open_attachment(self, msg: dict[str, Any]) -> None:
+        if msg.get("file_data"):
+            self.file_picker.save_file(
+                dialog_title="Зберегти файл",
+                file_name=msg.get("file_name") or "download",
+                src_bytes=msg["file_data"],
+            )
+            return
+        target = msg.get("file_url") or msg.get("file_path")
+        if not target:
+            self.snack("Файл доступний у повідомленні, але шлях не збережено")
+            return
+        if msg.get("file_url"):
+            self.page.launch_url(target)
+        elif hasattr(os, "startfile"):
+            os.startfile(target)
 
     def add_emoji(self, emoji: str) -> None:
         if not self.state.message_field:
@@ -660,6 +755,46 @@ class LogicordApp:
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
+        body: ft.Control
+        kind = msg.get("kind", "text")
+        if kind == "image" and (msg.get("file_data") or msg.get("file_url") or msg.get("file_path")):
+            body = ft.Image(
+            src=msg.get("file_data") or msg.get("file_url") or msg.get("file_path"),
+                width=320,
+                height=240,
+                fit=ft.BoxFit.CONTAIN,
+                border_radius=12,
+                cache_width=640,
+                cache_height=480,
+            )
+        elif kind == "video":
+            body = ft.Container(
+                padding=12,
+                bgcolor=p["panel_2"],
+                border_radius=10,
+                on_click=lambda e, message=msg: self.open_attachment(message),
+                content=ft.Row([
+                    ft.Icon(ft.Icons.VIDEO_FILE, color=p["accent"]),
+                    ft.Text(msg.get("file_name") or "Відео", color=text_color),
+                ]),
+            )
+        elif kind == "file":
+            body = ft.Container(
+                padding=12,
+                bgcolor=p["panel_2"],
+                border_radius=10,
+                on_click=lambda e, message=msg: self.open_attachment(message),
+                content=ft.Row([
+                    ft.Icon(ft.Icons.ATTACH_FILE, color=p["accent"]),
+                    ft.Column([
+                        ft.Text(msg.get("file_name") or "Файл", color=text_color, weight=ft.FontWeight.BOLD),
+                        ft.Text("Натисніть, щоб завантажити", color=p["muted"], size=11),
+                    ], spacing=2, tight=True),
+                ]),
+            )
+        else:
+            body = ft.Text(msg["text"], color=text_color, selectable=True)
+
         return ft.Container(
             key=f"message-{msg['id']}",
             width=520,
@@ -673,7 +808,7 @@ class LogicordApp:
                     [
                         header,
                         ft.Container(height=4),
-                        ft.Text(msg["text"], color=text_color, selectable=True),
+                        body,
                     ],
                     spacing=0,
                 ),
@@ -784,10 +919,20 @@ class LogicordApp:
                 [
                     ft.Row(
                         [
-                            ft.IconButton(
-                                icon=ft.Icons.EMOJI_EMOTIONS,
-                                tooltip="Эмодзі",
-                                on_click=lambda e: self.toggle_emoji_panel(),
+                            ft.Column(
+                                [
+                                    ft.IconButton(
+                                        icon=ft.Icons.ATTACH_FILE,
+                                        tooltip="Додати файл",
+                                        on_click=self.choose_files,
+                                    ),
+                                    ft.IconButton(
+                                        icon=ft.Icons.EMOJI_EMOTIONS,
+                                        tooltip="Емодзі",
+                                        on_click=lambda e: self.toggle_emoji_panel(),
+                                    ),
+                                ],
+                                spacing=0,
                             ),
                             self.state.message_field,
                             ft.FilledButton("Відправити", on_click=lambda e: self.send_message()),
@@ -929,6 +1074,7 @@ def main(page: ft.Page):
     page.scroll = None
 
     app = LogicordApp(page)
+    page.overlay.append(app.file_picker)
 
     def on_pubsub(data):
         if not isinstance(data, dict):
