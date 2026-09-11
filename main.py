@@ -103,10 +103,11 @@ class LogicordApp:
     def __init__(self, page: ft.Page) -> None:
         self.page = page
         self.state = AppState()
-        self.messages_column: ft.Column | None = None
+        self.messages_column: ft.ListView | None = None
         self.online_column: ft.Column | None = None
         self.profile_name: ft.Text | None = None
         self.profile_avatar: ft.Text | None = None
+        self.messages_at_bottom = True
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -389,8 +390,14 @@ class LogicordApp:
         if len(self.messages_column.controls) > 70:
             del self.messages_column.controls[0]
         self.messages_column.update()
-        self.messages_column.scroll_to(offset=-1, duration=120)
+        if self.messages_at_bottom:
+            self.messages_column.scroll_to(offset=-1, duration=120)
         self.page.update()
+
+    def on_messages_scroll(self, event: ft.OnScrollEvent) -> None:
+        self.messages_at_bottom = (
+            event.max_scroll_extent - event.pixels <= 24
+        )
 
     def refresh_online_users(self, users: list[dict[str, Any]]) -> None:
         if not self.online_column:
@@ -430,6 +437,8 @@ class LogicordApp:
             self.page.add(self.build_auth())
 
         self.page.update()
+        if self.state.user and self.messages_column:
+            self.messages_column.scroll_to(offset=-1)
 #МЕНЮ АВТОРІЗАЦІІ!!! -----------------------------------------
     def build_auth(self) -> ft.Control:
         p = self.palette()
@@ -698,11 +707,13 @@ class LogicordApp:
             on_submit=lambda e: self.send_message(),
         )
 
-        self.messages_column = ft.Column(
-            [self.build_message(msg) for msg in get_recent_messages(70)],
+        self.messages_column = ft.ListView(
+            controls=[self.build_message(msg) for msg in get_recent_messages(70)],
             spacing=10,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
+            build_controls_on_demand=True,
+            on_scroll=self.on_messages_scroll,
         )
 
         emoji_panel = ft.Container(
@@ -776,7 +787,7 @@ class LogicordApp:
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.Container(expand=True, content=self.messages_column),
+                    ft.Container(height=420, content=self.messages_column),
                     composer,
                 ],
                 spacing=12,
@@ -877,7 +888,7 @@ def main(page: ft.Page):
     page.spacing = 0
     page.window_min_width = 980
     page.window_min_height = 680
-    page.scroll = ft.ScrollMode.AUTO
+    page.scroll = None
 
     app = LogicordApp(page)
 
