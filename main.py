@@ -69,6 +69,7 @@ class LogicordApp:
         self.emoji_panel: ft.Container | None = None
         self.composer: ft.Container | None = None
         self.messages_scroll_position = 0.0
+        self._scrolling_to_latest = False
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -388,8 +389,10 @@ class LogicordApp:
         if not self.messages_column.controls:
             return
         self.messages_at_bottom = True
+        self._scrolling_to_latest = True
+        self.messages_column.auto_scroll = True
         self.messages_column.scroll_to(
-            scroll_key=self.messages_column.controls[-1].key,
+            offset=-1,
             duration=180,
             curve=ft.AnimationCurve.EASE_OUT,
         )
@@ -402,16 +405,26 @@ class LogicordApp:
         self.messages_column.controls.append(self.build_message(msg))
         if len(self.messages_column.controls) > 70:
             del self.messages_column.controls[0]
+        self.messages_column.auto_scroll = should_scroll
         self.messages_column.update()
         self.page.update()
         if should_scroll:
             self.scroll_to_latest(force=True)
+        else:
+            self.messages_column.auto_scroll = False
 
     def on_messages_scroll(self, event: ft.OnScrollEvent) -> None:
+        if self._scrolling_to_latest and event.max_scroll_extent - event.pixels <= 24:
+            self._scrolling_to_latest = False
+            self.messages_at_bottom = True
+            self.messages_scroll_position = event.pixels
+            self.messages_column.auto_scroll = True
+            return
         self.messages_scroll_position = event.pixels
         self.messages_at_bottom = (
             event.max_scroll_extent - event.pixels <= 24
         )
+        self.messages_column.auto_scroll = self.messages_at_bottom
 
     def refresh_online_users(self, users: list[dict[str, Any]]) -> None:
         if not self.online_column:
@@ -737,7 +750,7 @@ class LogicordApp:
             spacing=10,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
-            build_controls_on_demand=True,
+            auto_scroll=False,
             on_scroll=self.on_messages_scroll,
         )
 
