@@ -279,8 +279,8 @@ class LogicordApp:
         )
         self.page.pubsub.send_all({"type": "message", "message": message})
 
-    def choose_files(self, e: ft.ControlEvent | None = None) -> None:
-        files = self.file_picker.pick_files(
+    async def choose_files(self, e: ft.ControlEvent | None = None) -> None:
+        files = await self.file_picker.pick_files(
             dialog_title="Виберіть файли",
             allow_multiple=True,
             with_data=True,
@@ -316,13 +316,16 @@ class LogicordApp:
         self.page.pubsub.send_all({"type": "message", "message": message})
         return True
 
-    def open_attachment(self, msg: dict[str, Any]) -> None:
+    async def open_attachment(self, msg: dict[str, Any]) -> None:
         if msg.get("file_data"):
-            self.file_picker.save_file(
+            target = await self.file_picker.save_file(
                 dialog_title="Зберегти файл",
                 file_name=msg.get("file_name") or "download",
                 src_bytes=msg["file_data"],
             )
+            if target and not self.page.web:
+                with open(target, "wb") as output:
+                    output.write(msg["file_data"])
             return
         target = msg.get("file_url") or msg.get("file_path")
         if not target:
@@ -768,22 +771,28 @@ class LogicordApp:
                 cache_height=480,
             )
         elif kind == "video":
+            async def download_video(e: ft.ControlEvent, message: dict[str, Any] = msg) -> None:
+                await self.open_attachment(message)
+
             body = ft.Container(
                 padding=12,
                 bgcolor=p["panel_2"],
                 border_radius=10,
-                on_click=lambda e, message=msg: self.open_attachment(message),
+                on_click=download_video,
                 content=ft.Row([
                     ft.Icon(ft.Icons.VIDEO_FILE, color=p["accent"]),
                     ft.Text(msg.get("file_name") or "Відео", color=text_color),
                 ]),
             )
         elif kind == "file":
+            async def download_file(e: ft.ControlEvent, message: dict[str, Any] = msg) -> None:
+                await self.open_attachment(message)
+
             body = ft.Container(
                 padding=12,
                 bgcolor=p["panel_2"],
                 border_radius=10,
-                on_click=lambda e, message=msg: self.open_attachment(message),
+                on_click=download_file,
                 content=ft.Row([
                     ft.Icon(ft.Icons.ATTACH_FILE, color=p["accent"]),
                     ft.Column([
@@ -1074,7 +1083,7 @@ def main(page: ft.Page):
     page.scroll = None
 
     app = LogicordApp(page)
-    page.overlay.append(app.file_picker)
+    page.services.append(app.file_picker)
 
     def on_pubsub(data):
         if not isinstance(data, dict):
