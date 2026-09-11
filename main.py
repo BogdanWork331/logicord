@@ -108,6 +108,8 @@ class LogicordApp:
         self.profile_name: ft.Text | None = None
         self.profile_avatar: ft.Text | None = None
         self.messages_at_bottom = True
+        self.emoji_panel: ft.Container | None = None
+        self.composer: ft.Container | None = None
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -255,7 +257,17 @@ class LogicordApp:
 
     def toggle_emoji_panel(self) -> None:
         self.state.emoji_open = not self.state.emoji_open
-        self.render()
+        if not self.emoji_panel:
+            return
+
+        was_at_bottom = self.messages_at_bottom
+        self.emoji_panel.visible = self.state.emoji_open
+        self.emoji_panel.update()
+        if self.composer:
+            self.composer.update()
+        self.page.update()
+        if was_at_bottom and self.messages_column:
+            self.messages_column.scroll_to(offset=-1, duration=120)
 
     def open_profile(self) -> None:
         if not self.state.user:
@@ -716,7 +728,7 @@ class LogicordApp:
             on_scroll=self.on_messages_scroll,
         )
 
-        emoji_panel = ft.Container(
+        self.emoji_panel = ft.Container(
             visible=self.state.emoji_open,
             padding=8,
             border_radius=14,
@@ -737,7 +749,7 @@ class LogicordApp:
             ),
         )
 
-        composer = ft.Container(
+        self.composer = ft.Container(
             padding=12,
             border_radius=20,
             bgcolor=p["panel"],
@@ -757,7 +769,7 @@ class LogicordApp:
                         spacing=10,
                         vertical_alignment=ft.CrossAxisAlignment.END,
                     ),
-                    emoji_panel,
+                    self.emoji_panel,
                 ],
                 spacing=10,
                 tight=True,
@@ -765,6 +777,7 @@ class LogicordApp:
         )
 
         chat_area = ft.Container(
+            height=640,
             expand=True,
             padding=16,
             border_radius=24,
@@ -787,8 +800,8 @@ class LogicordApp:
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.Container(height=420, content=self.messages_column),
-                    composer,
+                    ft.Container(expand=True, content=self.messages_column),
+                    self.composer,
                 ],
                 spacing=12,
                 expand=True,
