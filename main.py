@@ -126,14 +126,15 @@ class LogicordApp:
         if theme not in THEMES:
             return
         self.state.theme = theme
-        if self.state.user:
+        if self.state.user and self.state.profile and self.state.profile.get("theme") != theme:
             upsert_profile(
                 self.state.user["id"],
-                display_name=self.state.profile["display_name"] if self.state.profile else self.state.user["username"],
-                avatar=self.state.profile["avatar"] if self.state.profile else "😀",
-                bio=self.state.profile["bio"] if self.state.profile else "",
+                display_name=self.state.profile["display_name"],
+                avatar=self.state.profile["avatar"],
+                bio=self.state.profile["bio"],
                 theme=theme,
             )
+            self.state.profile["theme"] = theme
         self.apply_theme()
         self.page.update()
 
