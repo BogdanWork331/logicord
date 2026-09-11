@@ -2,18 +2,39 @@ APP_NAME = "Logicord"
 
 THEMES = {
     "dark": {
-        "bg": "#0f172a",
-        "panel": "#1e293b",
-        "accent": "#3b82f6"
+        "bg": "#0B1020",
+        "panel": "#121A2D",
+        "panel_2": "#18223A",
+        "stroke": "#25314D",
+        "text": "#EEF3FF",
+        "muted": "#9CA7C8",
+        "accent": "#6C7DFF",
+        "danger": "#FF6B8B",
+        "bubble_self": "#6C7DFF",
+        "bubble_other": "#1C2742",
     },
     "purple": {
-        "bg": "#18122B",
-        "panel": "#393053",
-        "accent": "#A855F7"
+        "bg": "#120E1F",
+        "panel": "#1D1730",
+        "panel_2": "#2A2145",
+        "stroke": "#3A305B",
+        "text": "#F5F2FF",
+        "muted": "#B5A8D8",
+        "accent": "#A855F7",
+        "danger": "#FB7185",
+        "bubble_self": "#A855F7",
+        "bubble_other": "#2A2145",
     },
     "emerald": {
-        "bg": "#0f172a",
-        "panel": "#134e4a",
-        "accent": "#10b981"
-    }
+        "bg": "#07161A",
+        "panel": "#0D2429",
+        "panel_2": "#12333A",
+        "stroke": "#1C4951",
+        "text": "#E9FFFB",
+        "muted": "#9BD0C8",
+        "accent": "#10B981",
+        "danger": "#FB7185",
+        "bubble_self": "#10B981",
+        "bubble_other": "#12333A",
+    },
 }

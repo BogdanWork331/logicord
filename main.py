@@ -7,6 +7,7 @@ from typing import Any
 
 import flet as ft
 
+from config import APP_NAME, THEMES
 from database import (
     add_message,
     authenticate_user,
@@ -19,50 +20,6 @@ from database import (
     upsert_profile,
 )
 from security import login_limiter, normalize_username, is_valid_username
-
-APP_NAME = "Logicord"
-
-THEMES = {
-    "dark": {
-        "bg": "#0B1020",
-        "panel": "#121A2D",
-        "panel_2": "#18223A",
-        "stroke": "#25314D",
-        "text": "#EEF3FF",
-        "muted": "#9CA7C8",
-        "accent": "#6C7DFF",
-        "accent_2": "#4F67FF",
-        "danger": "#FF6B8B",
-        "bubble_self": "#6C7DFF",
-        "bubble_other": "#1C2742",
-    },
-    "purple": {
-        "bg": "#120E1F",
-        "panel": "#1D1730",
-        "panel_2": "#2A2145",
-        "stroke": "#3A305B",
-        "text": "#F5F2FF",
-        "muted": "#B5A8D8",
-        "accent": "#A855F7",
-        "accent_2": "#8B5CF6",
-        "danger": "#FB7185",
-        "bubble_self": "#A855F7",
-        "bubble_other": "#2A2145",
-    },
-    "emerald": {
-        "bg": "#07161A",
-        "panel": "#0D2429",
-        "panel_2": "#12333A",
-        "stroke": "#1C4951",
-        "text": "#E9FFFB",
-        "muted": "#9BD0C8",
-        "accent": "#10B981",
-        "accent_2": "#14B8A6",
-        "danger": "#FB7185",
-        "bubble_self": "#10B981",
-        "bubble_other": "#12333A",
-    },
-}
 
 AVATARS = ["😀", "😎", "🤖", "👑", "🛡️", "🔥", "🎮", "💎", "🧠", "⚡"]
 EMOJIS = [
@@ -102,6 +59,7 @@ class AppState:
 class LogicordApp:
     def __init__(self, page: ft.Page) -> None:
         self.page = page
+        self.root_control: ft.Control | None = None
         self.state = AppState()
         self.messages_column: ft.ListView | None = None
         self.online_column: ft.Column | None = None
@@ -110,6 +68,7 @@ class LogicordApp:
         self.messages_at_bottom = True
         self.emoji_panel: ft.Container | None = None
         self.composer: ft.Container | None = None
+        self.messages_scroll_position = 0.0
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -139,6 +98,33 @@ class LogicordApp:
             )
             self.state.profile["theme"] = theme
         self.apply_theme()
+        self.refresh_root_for_theme()
+
+    def refresh_root_for_theme(self) -> None:
+        if not self.root_control or not self.page.controls:
+            self.page.update()
+            return
+
+        message_text = self.state.message_field.value if self.state.message_field else ""
+        scroll_position = self.messages_scroll_position
+        was_at_bottom = self.messages_at_bottom
+        emoji_open = self.state.emoji_open
+
+        self.root_control = self.build_chat() if self.state.user else self.build_auth()
+        self.page.controls[0] = self.root_control
+        self.page.update()
+
+        if self.state.user:
+            if self.state.message_field:
+                self.state.message_field.value = message_text
+                self.state.message_field.update()
+            self.messages_at_bottom = was_at_bottom
+            if self.messages_column:
+                self.messages_column.scroll_to(
+                    offset=-1 if was_at_bottom else scroll_position,
+                )
+            if self.emoji_panel:
+                self.emoji_panel.visible = emoji_open
         self.page.update()
 
     def next_theme(self) -> None:
@@ -407,6 +393,7 @@ class LogicordApp:
         self.page.update()
 
     def on_messages_scroll(self, event: ft.OnScrollEvent) -> None:
+        self.messages_scroll_position = event.pixels
         self.messages_at_bottom = (
             event.max_scroll_extent - event.pixels <= 24
         )
@@ -444,9 +431,11 @@ class LogicordApp:
         self.page.clean()
 
         if self.state.user:
-            self.page.add(self.build_chat())
+            self.root_control = self.build_chat()
         else:
-            self.page.add(self.build_auth())
+            self.root_control = self.build_auth()
+
+        self.page.add(self.root_control)
 
         self.page.update()
         if self.state.user and self.messages_column:
@@ -520,16 +509,18 @@ class LogicordApp:
             visible=bool(self.state.error),
             padding=10,
             border_radius=12,
-            bgcolor="#3A1721",
-            content=ft.Text(self.state.error, color="#FFB4C4", size=12),
+            bgcolor=p["panel"],
+            border=ft.Border.all(1, p["danger"]),
+            content=ft.Text(self.state.error, color=p["danger"], size=12),
         )
 
         success_box = ft.Container(
             visible=bool(self.state.success),
             padding=10,
             border_radius=12,
-            bgcolor="#153126",
-            content=ft.Text(self.state.success, color="#B8F7D7", size=12),
+            bgcolor=p["panel"],
+            border=ft.Border.all(1, p["accent"]),
+            content=ft.Text(self.state.success, color=p["accent"], size=12),
         )
 
         login_form = ft.Column(
