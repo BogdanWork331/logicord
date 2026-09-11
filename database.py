@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Iterator
@@ -9,6 +10,8 @@ from typing import Any, Iterator
 from security import hash_password, verify_password, is_valid_username
 
 DB_FILE = os.environ.get("LOGICORD_DB", "users.db")
+_CONN: sqlite3.Connection | None = None
+_DB_LOCK = threading.RLock()
 
 
 def utc_now() -> str:
@@ -17,13 +20,19 @@ def utc_now() -> str:
 
 @contextmanager
 def get_conn() -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(DB_FILE, timeout=30, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    global _CONN
+    with _DB_LOCK:
+        if _CONN is None:
+            _CONN = sqlite3.connect(DB_FILE, timeout=30, check_same_thread=False)
+            _CONN.row_factory = sqlite3.Row
+            _CONN.execute("PRAGMA journal_mode=WAL")
+            _CONN.execute("PRAGMA synchronous=NORMAL")
+        try:
+            yield _CONN
+            _CONN.commit()
+        except Exception:
+            _CONN.rollback()
+            raise
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -59,6 +68,16 @@ def init_db() -> None:
                 remember_me INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_messages_created_at
+                ON messages(created_at, id);
             """
         )
 
@@ -138,6 +157,49 @@ def get_profile(user_id: int) -> dict[str, Any] | None:
     with get_conn() as conn:
         cur = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,))
         return row_to_dict(cur.fetchone())
+
+
+def add_message(user_id: int, text: str) -> dict[str, Any]:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO messages (user_id, text, created_at) VALUES (?, ?, ?)",
+            (user_id, text, utc_now()),
+        )
+        message_id = cur.lastrowid
+        row = conn.execute(
+            """
+            SELECT m.id, m.user_id, u.username,
+                   COALESCE(p.display_name, u.username) AS display_name,
+                   COALESCE(p.avatar, '😀') AS avatar,
+                   m.text, strftime('%H:%M', m.created_at) AS time
+            FROM messages m
+            JOIN users u ON u.id = m.user_id
+            LEFT JOIN profiles p ON p.user_id = m.user_id
+            WHERE m.id = ?
+            """,
+            (message_id,),
+        ).fetchone()
+    return row_to_dict(row) or {}
+
+
+def get_recent_messages(limit: int = 70) -> list[dict[str, Any]]:
+    limit = max(1, min(limit, 70))
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT m.id, m.user_id, u.username,
+                   COALESCE(p.display_name, u.username) AS display_name,
+                   COALESCE(p.avatar, '😀') AS avatar,
+                   m.text, strftime('%H:%M', m.created_at) AS time
+            FROM messages m
+            JOIN users u ON u.id = m.user_id
+            LEFT JOIN profiles p ON p.user_id = m.user_id
+            ORDER BY m.id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [row_to_dict(row) for row in reversed(rows)]
 
 
 def upsert_profile(

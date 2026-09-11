@@ -8,12 +8,14 @@ from typing import Any
 import flet as ft
 
 from database import (
+    add_message,
     authenticate_user,
     create_user,
+    get_recent_messages,
     get_profile,
     init_db,
     list_all_users,
-    save_settings,
+    save_settings,  
     upsert_profile,
 )
 from security import login_limiter, normalize_username, is_valid_username
@@ -69,7 +71,6 @@ EMOJIS = [
     "🎉", "🎮", "💻", "🚀", "⭐", "🛡️",
 ]
 
-CHAT_MESSAGES: list[dict[str, Any]] = []
 ONLINE_USERS: dict[int, dict[str, Any]] = {}
 
 
@@ -81,19 +82,9 @@ def theme_palette(name: str) -> dict[str, str]:
     return THEMES.get(name, THEMES["dark"])
 
 
-def push_message(author: dict[str, Any], text: str) -> None:
-    profile = get_profile(author["id"]) or {}
-    CHAT_MESSAGES.append(
-        {
-            "id": len(CHAT_MESSAGES) + 1,
-            "user_id": author["id"],
-            "username": author["username"],
-            "display_name": profile.get("display_name") or author["username"],
-            "avatar": profile.get("avatar") or "😀",
-            "text": text,
-            "time": now_hm(),
-        }
-    )
+def push_message(author: dict[str, Any], text: str, profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    profile = profile or {}
+    return add_message(author["id"], text)
 
 
 @dataclass
@@ -112,6 +103,10 @@ class LogicordApp:
     def __init__(self, page: ft.Page) -> None:
         self.page = page
         self.state = AppState()
+        self.messages_column: ft.Column | None = None
+        self.online_column: ft.Column | None = None
+        self.profile_name: ft.Text | None = None
+        self.profile_avatar: ft.Text | None = None
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -140,7 +135,7 @@ class LogicordApp:
                 theme=theme,
             )
         self.apply_theme()
-        self.render()
+        self.page.update()
 
     def next_theme(self) -> None:
         order = list(THEMES.keys())
@@ -193,6 +188,7 @@ class LogicordApp:
         self.state.success = "Успішний вхід"
         self.apply_theme()
         self.render()
+        self.page.pubsub.send_all({"type": "presence", "users": list(ONLINE_USERS.values())})
 
     def register(self, username: str, password: str, display_name: str, avatar: str) -> None:
         username = normalize_username(username)
@@ -229,6 +225,7 @@ class LogicordApp:
         self.state.error = ""
         self.state.success = ""
         self.render()
+        self.page.pubsub.send_all({"type": "presence", "users": list(ONLINE_USERS.values())})
 
     def toggle_mode(self, mode: str) -> None:
         self.state.mode = mode
@@ -244,10 +241,9 @@ class LogicordApp:
         if not text:
             return
 
-        push_message(self.state.user, text)
+        message = push_message(self.state.user, text, self.state.profile)
         self.state.message_field.value = ""
-        self.page.pubsub.send_all({"type": "refresh"})
-        self.render()
+        self.page.pubsub.send_all({"type": "message", "message": message})
 
     def add_emoji(self, emoji: str) -> None:
         if not self.state.message_field:
@@ -298,8 +294,25 @@ class LogicordApp:
                 bio=bio_field.value,
                 theme=theme_dd.value,
             )
-            self.state.profile = get_profile(self.state.user["id"])
+            self.state.profile = {
+                **(self.state.profile or {}),
+                "display_name": (display_name_field.value or "").strip() or self.state.user["username"],
+                "avatar": (avatar_dd.value or "😀").strip()[:4] or "😀",
+                "bio": (bio_field.value or "").strip(),
+                "theme": theme_dd.value,
+            }
             self.set_theme(theme_dd.value)
+            online_user = ONLINE_USERS.get(self.state.user["id"])
+            if online_user:
+                online_user.update(
+                    display_name=self.state.profile["display_name"],
+                    avatar=self.state.profile["avatar"],
+                )
+            if self.profile_name and self.profile_avatar:
+                self.profile_name.value = self.state.profile["display_name"]
+                self.profile_avatar.value = self.state.profile["avatar"]
+            self.refresh_online_users(list(ONLINE_USERS.values()))
+            self.page.pubsub.send_all({"type": "presence", "users": list(ONLINE_USERS.values())})
             self.snack("Профіль оновлено")
             dlg.open = False
             self.page.update()
@@ -350,6 +363,61 @@ class LogicordApp:
         self.set_theme(theme)
         dlg.open = False
         self.page.update()
+
+    def _profile_avatar_control(self) -> ft.Text:
+        self.profile_avatar = ft.Text(
+            self.state.profile.get("avatar", "😀") if self.state.profile else "😀",
+            size=26,
+        )
+        return self.profile_avatar
+
+    def _profile_name_control(self) -> ft.Text:
+        p = self.palette()
+        self.profile_name = ft.Text(
+            self.state.profile.get("display_name", self.state.user["username"])
+            if self.state.profile else self.state.user["username"],
+            color=p["text"],
+            weight=ft.FontWeight.BOLD,
+        )
+        return self.profile_name
+
+    def append_message(self, msg: dict[str, Any]) -> None:
+        if not self.messages_column or not self.state.user:
+            return
+        self.messages_column.controls.append(self.build_message(msg))
+        if len(self.messages_column.controls) > 70:
+            del self.messages_column.controls[0]
+        self.messages_column.update()
+        self.messages_column.scroll_to(offset=-1, duration=120)
+        self.page.update()
+
+    def refresh_online_users(self, users: list[dict[str, Any]]) -> None:
+        if not self.online_column:
+            return
+        self.online_column.controls = [self.build_online_user(user) for user in users]
+        self.online_column.update()
+
+    def build_online_user(self, user: dict[str, Any]) -> ft.Control:
+        p = self.palette()
+        return ft.Container(
+            padding=8,
+            bgcolor=p["panel_2"],
+            content=ft.Row(
+                [
+                    ft.Text(user["avatar"], size=14),
+                    ft.Column(
+                        [
+                            ft.Text(user["display_name"], color=p["text"], size=12),
+                            ft.Text(user["username"], color=p["muted"], size=10),
+                        ],
+                        spacing=0,
+                        tight=True,
+                    ),
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
 
     def render(self) -> None:
         self.apply_theme()
@@ -573,6 +641,12 @@ class LogicordApp:
     def build_chat(self) -> ft.Control:
         p = self.palette()
 
+        self.online_column = ft.Column(
+            [self.build_online_user(user) for user in ONLINE_USERS.values()],
+            spacing=8,
+            scroll=ft.ScrollMode.AUTO,
+        )
+
         sidebar = ft.Container(
             width=230,
             padding=14,
@@ -610,29 +684,7 @@ class LogicordApp:
                     ft.TextButton("🚪 Вийти", on_click=lambda e: self.logout()),
                     ft.Divider(height=10, color=p["stroke"]),
                     ft.Text("Онлайн", size=12, color=p["muted"]),
-                    *[
-                        ft.Container(
-                            padding=8,
-                            border_radius=12,
-                            bgcolor=p["panel_2"],
-                            content=ft.Row(
-                                [
-                                    ft.Text(u["avatar"], size=14),
-                                    ft.Column(
-                                        [
-                                            ft.Text(u["display_name"], color=p["text"], size=12),
-                                            ft.Text(u["username"], color=p["muted"], size=10),
-                                        ],
-                                        spacing=0,
-                                        tight=True,
-                                    ),
-                                ],
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            ),
-                        )
-                        for u in ONLINE_USERS.values()
-                    ],
+                    self.online_column,
                 ],
                 spacing=8,
                 scroll=ft.ScrollMode.AUTO,
@@ -645,10 +697,8 @@ class LogicordApp:
             on_submit=lambda e: self.send_message(),
         )
 
-        messages_column = ft.Column(
-            [
-                *[self.build_message(msg) for msg in CHAT_MESSAGES],
-            ],
+        self.messages_column = ft.Column(
+            [self.build_message(msg) for msg in get_recent_messages(70)],
             spacing=10,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
@@ -725,7 +775,7 @@ class LogicordApp:
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.Container(expand=True, content=messages_column),
+                    ft.Container(expand=True, content=self.messages_column),
                     composer,
                 ],
                 spacing=12,
@@ -748,12 +798,8 @@ class LogicordApp:
                         bgcolor=p["panel_2"],
                         content=ft.Column(
                             [
-                                ft.Text(self.state.profile.get("avatar", "😀") if self.state.profile else "😀", size=26),
-                                ft.Text(
-                                    self.state.profile.get("display_name", self.state.user["username"]) if self.state.profile else self.state.user["username"],
-                                    color=p["text"],
-                                    weight=ft.FontWeight.BOLD,
-                                ),
+                                self._profile_avatar_control(),
+                                self._profile_name_control(),
                                 ft.Text(self.state.user["username"], color=p["muted"], size=11),
                                 ft.Text(
                                     f"Role: {self.state.user.get('role', 'user')}",
@@ -835,8 +881,15 @@ def main(page: ft.Page):
     app = LogicordApp(page)
 
     def on_pubsub(data):
-        if isinstance(data, dict) and data.get("type") == "refresh":
-            app.render()
+        if not isinstance(data, dict):
+            return
+        if data.get("type") == "message":
+            app.append_message(data.get("message") or {})
+        elif data.get("type") == "presence":
+            users = data.get("users") or []
+            ONLINE_USERS.clear()
+            ONLINE_USERS.update({user["id"]: user for user in users})
+            app.refresh_online_users(users)
 
     page.pubsub.subscribe(on_pubsub)
 
