@@ -31,6 +31,9 @@ EMOJIS = [
 ]
 
 ONLINE_USERS: dict[int, dict[str, Any]] = {}
+# Each open app session is tracked separately so logging out on one device does not
+# accidentally mark the same account offline on another device.
+ONLINE_SESSIONS: dict[str, dict[str, Any]] = {}
 
 
 def now_hm() -> str:
@@ -68,10 +71,13 @@ class AppState:
 class LogicordApp:
     def __init__(self, page: ft.Page) -> None:
         self.page = page
+        self.session_id = str(id(page))
         self.root_control: ft.Control | None = None
         self.state = AppState()
         self.messages_column: ft.ListView | None = None
         self.online_column: ft.Column | None = None
+        self.all_online_column: ft.Column | None = None
+        self.online_count_label: ft.Text | None = None
         self.profile_name: ft.Text | None = None
         self.profile_avatar: ft.Text | None = None
         self.messages_at_bottom = True
@@ -83,6 +89,55 @@ class LogicordApp:
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
+
+    def pill_button(self, label: str, on_click, selected: bool = False) -> ft.OutlinedButton:
+        """Outlined pill buttons matching the original Logicord auth mockup."""
+        p = self.palette()
+        return ft.OutlinedButton(
+            label,
+            on_click=on_click,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=24),
+                side=ft.BorderSide(1, p["accent"] if selected else p["muted"]),
+                color=p["text"],
+                padding=ft.Padding(18, 7, 18, 7),
+            ),
+        )
+
+    def primary_button(self, label: str, on_click) -> ft.FilledButton:
+        p = self.palette()
+        return ft.FilledButton(
+            label,
+            on_click=on_click,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=24),
+                padding=ft.Padding(20, 10, 20, 10),
+                bgcolor=p["accent"],
+                color="#FFFFFF",
+            ),
+        )
+
+    def _rebuild_online_users(self) -> list[dict[str, Any]]:
+        """Rebuild the online list from active sessions in this server process."""
+        ONLINE_USERS.clear()
+        for user in ONLINE_SESSIONS.values():
+            uid = user.get("id")
+            if uid is not None:
+                ONLINE_USERS[uid] = dict(user)
+        return list(ONLINE_USERS.values())
+
+    def _broadcast_presence(self) -> None:
+        users = self._rebuild_online_users()
+        try:
+            self.page.pubsub.send_all({"type": "presence", "users": users})
+        except Exception:
+            # The page can already be disconnecting; local state is still updated.
+            pass
+
+    def disconnect(self) -> None:
+        """Clean up presence when a browser tab/session disconnects."""
+        ONLINE_SESSIONS.pop(self.session_id, None)
+        self._broadcast_presence()
 
     def snack(self, text: str) -> None:
         self.page.snack_bar = ft.SnackBar(content=ft.Text(text))
@@ -177,12 +232,13 @@ class LogicordApp:
         }
         self.state.theme = self.state.profile.get("theme") or "dark"
 
-        ONLINE_USERS[user["id"]] = {
+        ONLINE_SESSIONS[self.session_id] = {
             "id": user["id"],
             "username": user["username"],
             "display_name": self.state.profile.get("display_name") or user["username"],
             "avatar": self.state.profile.get("avatar") or "😀",
             "role": user.get("role", "user"),
+            "session_id": self.session_id,
         }
 
         save_settings(user["id"], remember_me=remember)
@@ -190,7 +246,7 @@ class LogicordApp:
         self.state.success = "Успішний вхід"
         self.apply_theme()
         self.render()
-        self.page.pubsub.send_all({"type": "presence", "users": list(ONLINE_USERS.values())})
+        self._broadcast_presence()
 
     def register(self, username: str, password: str, display_name: str, avatar: str) -> None:
         username = normalize_username(username)
@@ -219,15 +275,14 @@ class LogicordApp:
         self.render()
 
     def logout(self) -> None:
-        if self.state.user:
-            ONLINE_USERS.pop(self.state.user["id"], None)
+        ONLINE_SESSIONS.pop(self.session_id, None)
         self.state.user = None
         self.state.profile = None
         self.state.emoji_open = False
         self.state.error = ""
         self.state.success = ""
         self.render()
-        self.page.pubsub.send_all({"type": "presence", "users": list(ONLINE_USERS.values())})
+        self._broadcast_presence()
 
     def toggle_mode(self, mode: str) -> None:
         self.state.mode = mode
@@ -403,7 +458,7 @@ class LogicordApp:
                 "theme": theme_dd.value,
             }
             self.set_theme(theme_dd.value)
-            online_user = ONLINE_USERS.get(self.state.user["id"])
+            online_user = ONLINE_SESSIONS.get(self.session_id)
             if online_user:
                 online_user.update(
                     display_name=self.state.profile["display_name"],
@@ -412,8 +467,7 @@ class LogicordApp:
             if self.profile_name and self.profile_avatar:
                 self.profile_name.value = self.state.profile["display_name"]
                 self.profile_avatar.value = self.state.profile["avatar"]
-            self.refresh_online_users(list(ONLINE_USERS.values()))
-            self.page.pubsub.send_all({"type": "presence", "users": list(ONLINE_USERS.values())})
+            self._broadcast_presence()
             self.snack("Профіль оновлено")
             dlg.open = False
             self.page.update()
@@ -448,9 +502,9 @@ class LogicordApp:
             title=ft.Text("Тема"),
             content=ft.Column(
                 [
-                    ft.TextButton("Dark", on_click=lambda e: self._choose_theme("dark", dlg)),
-                    ft.TextButton("Purple", on_click=lambda e: self._choose_theme("purple", dlg)),
-                    ft.TextButton("Emerald", on_click=lambda e: self._choose_theme("emerald", dlg)),
+                    self.pill_button("Dark", lambda e: self._choose_theme("dark", dlg), self.state.theme == "dark"),
+                    self.pill_button("Purple", lambda e: self._choose_theme("purple", dlg), self.state.theme == "purple"),
+                    self.pill_button("Emerald", lambda e: self._choose_theme("emerald", dlg), self.state.theme == "emerald"),
                 ],
                 tight=True,
             ),
@@ -525,10 +579,28 @@ class LogicordApp:
         self.messages_column.auto_scroll = self.messages_at_bottom
 
     def refresh_online_users(self, users: list[dict[str, Any]]) -> None:
-        if not self.online_column:
-            return
-        self.online_column.controls = [self.build_online_user(user) for user in users]
-        self.online_column.update()
+        users = sorted(users, key=lambda u: (u.get("display_name") or u.get("username", "")).lower())
+        online_controls = (
+            [self.build_online_user(user) for user in users]
+            if users else [ft.Container(
+                padding=12,
+                content=ft.Text("Наразі нікого немає онлайн", color=self.palette()["muted"], size=11),
+            )]
+        )
+        if self.online_column:
+            self.online_column.controls = online_controls
+            self.online_column.update()
+        if self.all_online_column:
+            self.all_online_column.controls = [
+                self.build_online_user(user) for user in users
+            ] if users else [ft.Container(
+                padding=12,
+                content=ft.Text("Наразі нікого немає онлайн", color=self.palette()["muted"], size=11),
+            )]
+            self.all_online_column.update()
+        if self.online_count_label:
+            self.online_count_label.value = str(len(users))
+            self.online_count_label.update()
 
     def build_online_user(self, user: dict[str, Any]) -> ft.Control:
         p = self.palette()
@@ -662,9 +734,9 @@ class LogicordApp:
                     ft.Text("ОБЕРІТЬ СВОЮ ТЕМУ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Row(
                         [
-                            ft.OutlinedButton("Dark", on_click=lambda e: self.set_theme("dark")),
-                            ft.OutlinedButton("Purple", on_click=lambda e: self.set_theme("purple")),
-                            ft.OutlinedButton("Emerald", on_click=lambda e: self.set_theme("emerald")),
+                            self.pill_button("Dark", lambda e: self.set_theme("dark"), self.state.theme == "dark"),
+                            self.pill_button("Purple", lambda e: self.set_theme("purple"), self.state.theme == "purple"),
+                            self.pill_button("Emerald", lambda e: self.set_theme("emerald"), self.state.theme == "emerald"),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
                         spacing=8,
@@ -679,18 +751,23 @@ class LogicordApp:
         )
 
         # Authentication controls intentionally keep the original workflow and layout.
-        login_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE)
+        login_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value))
         login_password = ft.TextField(
             label="Пароль", width=320, password=True,
             can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
+            on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value),
         )
         login_remember = ft.Checkbox(label="Запам'ятати мене", value=True)
 
-        reg_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE)
+        reg_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.register(reg_username.value, reg_password.value, reg_display_name.value, reg_avatar.value))
         reg_display_name = ft.TextField(label="Ім'я в чаті", width=320, prefix_icon=ft.Icons.BADGE_OUTLINED)
         reg_password = ft.TextField(
             label="Пароль", width=320, password=True,
             can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
+            on_submit=lambda e: self.register(
+                reg_username.value, reg_password.value,
+                reg_display_name.value, reg_avatar.value,
+            ),
         )
         reg_avatar = ft.Dropdown(
             label="Аватар", width=320, value="😀",
@@ -714,9 +791,9 @@ class LogicordApp:
                 login_username, login_password, login_remember,
                 ft.Row(
                     [
-                        ft.FilledButton(
-                            "Ввійти",
-                            on_click=lambda e: self.login(
+                        self.primary_button(
+                            "Увійти",
+                            lambda e: self.login(
                                 login_username.value, login_password.value, login_remember.value
                             ),
                         ),
@@ -732,9 +809,9 @@ class LogicordApp:
                 reg_username, reg_display_name, reg_password, reg_avatar,
                 ft.Row(
                     [
-                        ft.FilledButton(
+                        self.primary_button(
                             "Створити обліковий запис",
-                            on_click=lambda e: self.register(
+                            lambda e: self.register(
                                 reg_username.value, reg_password.value,
                                 reg_display_name.value, reg_avatar.value,
                             ),
@@ -755,8 +832,8 @@ class LogicordApp:
                 [
                     ft.Row(
                         [
-                            ft.OutlinedButton("Вхід", on_click=lambda e: self.toggle_mode("login")),
-                            ft.OutlinedButton("Реєстрація", on_click=lambda e: self.toggle_mode("register")),
+                            self.pill_button("Вхід", lambda e: self.toggle_mode("login"), self.state.mode == "login"),
+                            self.pill_button("Реєстрація", lambda e: self.toggle_mode("register"), self.state.mode == "register"),
                         ],
                         alignment=ft.MainAxisAlignment.START,
                     ),
@@ -871,7 +948,9 @@ class LogicordApp:
         p = self.palette()
 
         self.online_column = ft.Column(
-            [self.build_online_user(user) for user in ONLINE_USERS.values()],
+            [self.build_online_user(user) for user in ONLINE_USERS.values()] or [
+                ft.Container(padding=12, content=ft.Text("Наразі нікого немає онлайн", color=p["muted"], size=11))
+            ],
             spacing=7,
             scroll=ft.ScrollMode.AUTO,
         )
@@ -900,6 +979,7 @@ class LogicordApp:
             ], spacing=10,
         )
 
+        self.online_count_label = ft.Text(str(len(ONLINE_USERS)), size=10, color=p["accent"])
         sidebar = ft.Container(
             width=224, padding=14, border_radius=22,
             bgcolor=p["panel"], border=ft.Border.all(1, p["stroke"]),
@@ -912,6 +992,8 @@ class LogicordApp:
                     ft.Container(
                         padding=ft.Padding(11, 9, 11, 9), border_radius=12,
                         bgcolor=p["panel_2"],
+                        on_click=lambda e: self.snack("Ви вже перебуваєте в загальному чаті"),
+                        ink=True,
                         content=ft.Row(
                             [ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, color=p["accent"], size=19),
                              ft.Text("Загальний чат", color=p["text"], size=13, weight=ft.FontWeight.W_500),
@@ -920,18 +1002,18 @@ class LogicordApp:
                         ),
                     ),
                     ft.Text("НАЛАШТУВАННЯ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
-                    ft.TextButton("👤  Профіль", on_click=lambda e: self.open_profile()),
-                    ft.TextButton("🎨  Змінити тему", on_click=lambda e: self.open_theme_menu()),
+                    ft.TextButton("👤  Профіль", on_click=lambda e: self.open_profile(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
+                    ft.TextButton("🎨  Змінити тему", on_click=lambda e: self.open_theme_menu(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
                     ft.Divider(height=1, color=p["stroke"]),
                     ft.Row(
                         [ft.Text("УЧАСНИКИ ОНЛАЙН", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                          ft.Container(expand=True),
                          ft.Container(padding=ft.Padding(6, 2, 6, 2), border_radius=8,
-                                      bgcolor=p["panel_2"], content=ft.Text(str(len(ONLINE_USERS)), size=10, color=p["accent"]))],
+                                      bgcolor=p["panel_2"], content=self.online_count_label)],
                     ),
                     ft.Container(expand=True, content=self.online_column),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.TextButton("🚪  Вийти з акаунта", on_click=lambda e: self.logout()),
+                    ft.TextButton("🚪  Вийти з акаунта", on_click=lambda e: self.logout(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
                 ], spacing=8, expand=True,
             ),
         )
@@ -1025,6 +1107,14 @@ class LogicordApp:
         )
 
         profile = self.state.profile or {}
+        self.all_online_column = ft.Column(
+            [self.build_online_user(user) for user in ONLINE_USERS.values()] or [
+                ft.Container(padding=12, content=ft.Text("Наразі нікого немає онлайн", color=p["muted"], size=11))
+            ],
+            spacing=7,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
         right_panel = ft.Container(
             width=220, padding=14, border_radius=22,
             bgcolor=p["panel"], border=ft.Border.all(1, p["stroke"]),
@@ -1069,30 +1159,14 @@ class LogicordApp:
                         ], alignment=ft.MainAxisAlignment.SPACE_AROUND,
                     ),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.Text("КОРИСТУВАЧІ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
-                    ft.Container(
-                        expand=True,
-                        content=ft.Column(
-                            [
-                                ft.Container(
-                                    padding=8, border_radius=12, bgcolor=p["panel_2"],
-                                    content=ft.Row(
-                                        [
-                                            ft.Text(u.get("avatar") or "😀", size=17),
-                                            ft.Column(
-                                                [
-                                                    ft.Text(u.get("display_name") or u.get("username", "Користувач"),
-                                                            color=p["text"], size=11, max_lines=1),
-                                                    ft.Text("@" + u.get("username", ""), color=p["muted"], size=10),
-                                                ], spacing=1, tight=True, expand=True,
-                                            ),
-                                        ], spacing=8,
-                                    ),
-                                )
-                                for u in list_all_users()
-                            ], spacing=7, scroll=ft.ScrollMode.AUTO,
-                        ),
+                    ft.Row(
+                        [
+                            ft.Text("ОНЛАЙН ЗАРАЗ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                            ft.Container(expand=True),
+                            ft.Icon(ft.Icons.CIRCLE, size=7, color="#43D9A3"),
+                        ],
                     ),
+                    ft.Container(expand=True, content=self.all_online_column),
                 ], spacing=9, expand=True,
             ),
         )
@@ -1130,10 +1204,15 @@ def main(page: ft.Page):
         elif data.get("type") == "presence":
             users = data.get("users") or []
             ONLINE_USERS.clear()
-            ONLINE_USERS.update({user["id"]: user for user in users})
+            ONLINE_USERS.update({user["id"]: user for user in users if user.get("id") is not None})
             app.refresh_online_users(users)
 
     page.pubsub.subscribe(on_pubsub)
+    # Flet invokes this when the browser session disconnects. It prevents stale online badges.
+    try:
+        page.on_disconnect = lambda e: app.disconnect()
+    except Exception:
+        pass
 
     app.render()
 
