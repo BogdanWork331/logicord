@@ -23,6 +23,74 @@ from database import (
 )
 from security import login_limiter, normalize_username, is_valid_username
 
+LANGUAGES = {"ru": "Русский", "uk": "Українська", "en": "English", "fr": "Français"}
+
+# Source strings are the existing UI text; all four translations are kept together
+# so changing the language updates the whole interface consistently.
+TRANSLATIONS: dict[str, dict[str, str]] = {
+    "ЯЗЫК / LANGUAGE": {"ru": "ЯЗЫК", "uk": "МОВА", "en": "LANGUAGE", "fr": "LANGUE"},
+    "Роль": {"ru": "Роль", "uk": "Роль", "en": "Role", "fr": "Rôle"},
+    "Зберегти файл": {"ru": "Сохранить файл", "uk": "Зберегти файл", "en": "Save file", "fr": "Enregistrer le fichier"},
+    "Язык / Language": {"ru": "Язык", "uk": "Мова", "en": "Language", "fr": "Langue"},
+    "Введіть логін і пароль": {"ru": "Введите логин и пароль", "uk": "Введіть логін і пароль", "en": "Enter username and password", "fr": "Saisissez le nom d'utilisateur et le mot de passe"},
+    "Логін: 3–32 символи, тільки латиница, цифри, _, -, .": {"ru": "Логин: 3–32 символа, латиница, цифры, _, -, .", "uk": "Логін: 3–32 символи, латиниця, цифри, _, -, .", "en": "Username: 3–32 characters; letters, numbers, _, -, .", "fr": "Identifiant : 3–32 caractères, lettres, chiffres, _, -, ."},
+    "Успішний вхід": {"ru": "Вы успешно вошли", "uk": "Успішний вхід", "en": "Signed in successfully", "fr": "Connexion réussie"},
+    "Аккаунт створено. Тепер увійдіть.": {"ru": "Аккаунт создан. Теперь войдите.", "uk": "Обліковий запис створено. Тепер увійдіть.", "en": "Account created. You can now sign in.", "fr": "Compte créé. Vous pouvez maintenant vous connecter."},
+    "Ім'я в чаті": {"ru": "Имя в чате", "uk": "Ім'я в чаті", "en": "Chat display name", "fr": "Nom affiché dans le chat"},
+    "Про мене": {"ru": "Обо мне", "uk": "Про мене", "en": "About me", "fr": "À propos de moi"},
+    "Аватар": {"ru": "Аватар", "uk": "Аватар", "en": "Avatar", "fr": "Avatar"},
+    "Тема": {"ru": "Тема", "uk": "Тема", "en": "Theme", "fr": "Thème"},
+    "Профіль": {"ru": "Профиль", "uk": "Профіль", "en": "Profile", "fr": "Profil"},
+    "Відміна": {"ru": "Отмена", "uk": "Скасувати", "en": "Cancel", "fr": "Annuler"},
+    "Зберегти": {"ru": "Сохранить", "uk": "Зберегти", "en": "Save", "fr": "Enregistrer"},
+    "Закрыть": {"ru": "Закрыть", "uk": "Закрити", "en": "Close", "fr": "Fermer"},
+    "Профіль оновлено": {"ru": "Профиль обновлён", "uk": "Профіль оновлено", "en": "Profile updated", "fr": "Profil mis à jour"},
+    "Наразі нікого немає онлайн": {"ru": "Сейчас никого нет в сети", "uk": "Наразі нікого немає онлайн", "en": "Nobody is online right now", "fr": "Personne n'est en ligne pour le moment"},
+    "Користувач": {"ru": "Пользователь", "uk": "Користувач", "en": "User", "fr": "Utilisateur"},
+    "У мережі": {"ru": "В сети", "uk": "У мережі", "en": "Online", "fr": "En ligne"},
+    "Найкращий чат у MAX, точно!": {"ru": "Лучший чат в MAX, точно!", "uk": "Найкращий чат у MAX, точно!", "en": "The best chat on MAX, for sure!", "fr": "Le meilleur chat sur MAX, c'est sûr !"},
+    "Гнучкий інтерфейс": {"ru": "Гибкий интерфейс", "uk": "Гнучкий інтерфейс", "en": "Flexible interface", "fr": "Interface flexible"},
+    "Швидка реєстрація": {"ru": "Быстрая регистрация", "uk": "Швидка реєстрація", "en": "Quick registration", "fr": "Inscription rapide"},
+    "Багато функцій": {"ru": "Много функций", "uk": "Багато функцій", "en": "Lots of features", "fr": "Nombreuses fonctionnalités"},
+    "Гнучкість налаштування": {"ru": "Гибкие настройки", "uk": "Гнучкість налаштування", "en": "Flexible settings", "fr": "Paramètres flexibles"},
+    "Темні акцентні теми": {"ru": "Тёмные акцентные темы", "uk": "Темні акцентні теми", "en": "Dark accent themes", "fr": "Thèmes sombres accentués"},
+    "ОБЕРІТЬ СВОЮ ТЕМУ": {"ru": "ВЫБЕРИТЕ ТЕМУ", "uk": "ОБЕРІТЬ СВОЮ ТЕМУ", "en": "CHOOSE YOUR THEME", "fr": "CHOISISSEZ VOTRE THÈME"},
+    "Логін": {"ru": "Логин", "uk": "Логін", "en": "Username", "fr": "Identifiant"},
+    "Пароль": {"ru": "Пароль", "uk": "Пароль", "en": "Password", "fr": "Mot de passe"},
+    "Запам'ятати мене": {"ru": "Запомнить меня", "uk": "Запам'ятати мене", "en": "Remember me", "fr": "Se souvenir de moi"},
+    "Вхід": {"ru": "Вход", "uk": "Вхід", "en": "Sign in", "fr": "Connexion"},
+    "Реєстрація": {"ru": "Регистрация", "uk": "Реєстрація", "en": "Register", "fr": "Inscription"},
+    "Увійти": {"ru": "Войти", "uk": "Увійти", "en": "Sign in", "fr": "Se connecter"},
+    "Створити обліковий запис": {"ru": "Создать аккаунт", "uk": "Створити обліковий запис", "en": "Create account", "fr": "Créer un compte"},
+    "Натисніть, щоб відкрити": {"ru": "Нажмите, чтобы открыть", "uk": "Натисніть, щоб відкрити", "en": "Click to open", "fr": "Cliquez pour ouvrir"},
+    "Відео": {"ru": "Видео", "uk": "Відео", "en": "Video", "fr": "Vidéo"},
+    "Файл": {"ru": "Файл", "uk": "Файл", "en": "File", "fr": "Fichier"},
+    "Простір спілкування": {"ru": "Пространство для общения", "uk": "Простір спілкування", "en": "Your space to chat", "fr": "Votre espace de discussion"},
+    "РОБОЧИЙ ПРОСТІР": {"ru": "РАБОЧАЯ ОБЛАСТЬ", "uk": "РОБОЧИЙ ПРОСТІР", "en": "WORKSPACE", "fr": "ESPACE DE TRAVAIL"},
+    "Загальний чат": {"ru": "Общий чат", "uk": "Загальний чат", "en": "General chat", "fr": "Chat général"},
+    "Ви вже перебуваєте в загальному чаті": {"ru": "Вы уже находитесь в общем чате", "uk": "Ви вже перебуваєте в загальному чаті", "en": "You're already in the general chat", "fr": "Vous êtes déjà dans le chat général"},
+    "НАЛАШТУВАННЯ": {"ru": "НАСТРОЙКИ", "uk": "НАЛАШТУВАННЯ", "en": "SETTINGS", "fr": "PARAMÈTRES"},
+    "👤  Профіль": {"ru": "👤  Профиль", "uk": "👤  Профіль", "en": "👤  Profile", "fr": "👤  Profil"},
+    "🎨  Змінити тему": {"ru": "🎨  Сменить тему", "uk": "🎨  Змінити тему", "en": "🎨  Change theme", "fr": "🎨  Changer de thème"},
+    "УЧАСНИКИ ОНЛАЙН": {"ru": "УЧАСТНИКИ В СЕТИ", "uk": "УЧАСНИКИ ОНЛАЙН", "en": "ONLINE MEMBERS", "fr": "MEMBRES EN LIGNE"},
+    "🚪  Вийти з акаунта": {"ru": "🚪  Выйти из аккаунта", "uk": "🚪  Вийти з акаунта", "en": "🚪  Log out", "fr": "🚪  Déconnexion"},
+    "Напишіть повідомлення…": {"ru": "Напишите сообщение…", "uk": "Напишіть повідомлення…", "en": "Write a message…", "fr": "Écrire un message…"},
+    "Додати файл": {"ru": "Прикрепить файл", "uk": "Додати файл", "en": "Attach file", "fr": "Joindre un fichier"},
+    "Емодзі": {"ru": "Эмодзи", "uk": "Емодзі", "en": "Emoji", "fr": "Emoji"},
+    "Надіслати": {"ru": "Отправить", "uk": "Надіслати", "en": "Send", "fr": "Envoyer"},
+    "Спілкуйтеся та діліться файлами": {"ru": "Общайтесь и делитесь файлами", "uk": "Спілкуйтеся та діліться файлами", "en": "Chat and share files", "fr": "Discutez et partagez des fichiers"},
+    "ВАШ ПРОФІЛЬ": {"ru": "ВАШ ПРОФИЛЬ", "uk": "ВАШ ПРОФІЛЬ", "en": "YOUR PROFILE", "fr": "VOTRE PROFIL"},
+    "Редагувати профіль": {"ru": "Редактировать профиль", "uk": "Редагувати профіль", "en": "Edit profile", "fr": "Modifier le profil"},
+    "ШВИДКІ ТЕМИ": {"ru": "БЫСТРЫЕ ТЕМЫ", "uk": "ШВИДКІ ТЕМИ", "en": "QUICK THEMES", "fr": "THÈMES RAPIDES"},
+    "ОНЛАЙН ЗАРАЗ": {"ru": "СЕЙЧАС В СЕТИ", "uk": "ОНЛАЙН ЗАРАЗ", "en": "ONLINE NOW", "fr": "EN LIGNE"},
+    "Натисніть, щоб завантажити": {"ru": "Нажмите, чтобы скачать", "uk": "Натисніть, щоб завантажити", "en": "Click to download", "fr": "Cliquez pour télécharger"},
+    "Виберіть файли": {"ru": "Выберите файлы", "uk": "Виберіть файли", "en": "Choose files", "fr": "Choisir des fichiers"},
+    "Файл доступний у повідомленні, але шлях не збережено": {"ru": "Файл доступен в сообщении, но путь не сохранён", "uk": "Файл доступний у повідомленні, але шлях не збережено", "en": "The file is attached, but its path was not saved", "fr": "Le fichier est joint, mais son chemin n'a pas été enregistré"},
+    "Зображення завелике (максимум 8 MB)": {"ru": "Изображение слишком большое (максимум 8 МБ)", "uk": "Зображення завелике (максимум 8 MB)", "en": "Image is too large (8 MB maximum)", "fr": "Image trop volumineuse (8 Mo maximum)"},
+    "Файл завеликий (максимум 8 MB)": {"ru": "Файл слишком большой (максимум 8 МБ)", "uk": "Файл завеликий (максимум 8 MB)", "en": "File is too large (8 MB maximum)", "fr": "Fichier trop volumineux (8 Mo maximum)"},
+    "Дуже багато спроб. Спробуйте через {seconds} сек.": {"ru": "Слишком много попыток. Повторите через {seconds} сек.", "uk": "Дуже багато спроб. Спробуйте через {seconds} сек.", "en": "Too many attempts. Try again in {seconds} seconds.", "fr": "Trop de tentatives. Réessayez dans {seconds} secondes."},
+}
+
 AVATARS = ["😀", "😎", "🤖", "👑", "🛡️", "🔥", "🎮", "💎", "🧠", "⚡"]
 EMOJIS = [
     "😀", "😎", "😂", "🤣", "😁", "😍",
@@ -61,6 +129,7 @@ class AppState:
     user: dict[str, Any] | None = None
     profile: dict[str, Any] | None = None
     theme: str = "dark"
+    language: str = "ru"  # ru is the default language
     mode: str = "login"  # login | register
     error: str = ""
     success: str = ""
@@ -86,6 +155,39 @@ class LogicordApp:
         self.messages_scroll_position = 0.0
         self._scrolling_to_latest = False
         self.file_picker = ft.FilePicker()
+
+    def tr(self, text: str) -> str:
+        """Translate a UI string for the currently selected language."""
+        return TRANSLATIONS.get(text, {}).get(self.state.language, text)
+
+    def set_language(self, language: str) -> None:
+        if language not in LANGUAGES:
+            return
+        if self.state.language == language:
+            return
+        self.state.language = language
+        self.render()
+
+    def language_picker(self) -> ft.Control:
+        """Compact flag-based language selector used on auth and chat screens."""
+        return ft.Row(
+            [
+                self.pill_button(
+                    f"{flag} {code}",
+                    lambda e, lang=lang: self.set_language(lang),
+                    self.state.language == lang,
+                )
+                for lang, flag, code in [
+                    ("ru", "🇷🇺", "RU"),
+                    ("uk", "🇺🇦", "UA"),
+                    ("en", "🇬🇧", "EN"),
+                    ("fr", "🇫🇷", "FR"),
+                ]
+            ],
+            spacing=6,
+            wrap=True,
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
 
     def palette(self) -> dict[str, str]:
         return theme_palette(self.state.theme)
@@ -202,18 +304,18 @@ class LogicordApp:
     def login(self, username: str, password: str, remember: bool) -> None:
         username = normalize_username(username)
         if not username or not password:
-            self.state.error = "Введіть логін і пароль"
+            self.state.error = self.tr("Введіть логін і пароль")
             self.render()
             return
 
         if not is_valid_username(username):
-            self.state.error = "Логін: 3–32 символи, тільки латиница, цифри, _, -, ."
+            self.state.error = self.tr("Логін: 3–32 символи, тільки латиница, цифри, _, -, .")
             self.render()
             return
 
         allowed, retry_after = login_limiter.check(username.lower())
         if not allowed:
-            self.state.error = f"Дуже багато спроб. Спробуйте через {retry_after} сек."
+            self.state.error = self.tr("Дуже багато спроб. Спробуйте через {seconds} сек.").format(seconds=retry_after)
             self.render()
             return
 
@@ -243,7 +345,7 @@ class LogicordApp:
 
         save_settings(user["id"], remember_me=remember)
         self.state.error = ""
-        self.state.success = "Успішний вхід"
+        self.state.success = self.tr("Успішний вхід")
         self.apply_theme()
         self.render()
         self._broadcast_presence()
@@ -254,12 +356,12 @@ class LogicordApp:
         avatar = (avatar or "😀").strip()[:4] or "😀"
 
         if not username or not password:
-            self.state.error = "Введіть логін і пароль"
+            self.state.error = self.tr("Введіть логін і пароль")
             self.render()
             return
 
         if not is_valid_username(username):
-            self.state.error = "Логін: 3–32 символи, тільки латиница, цифри, _, -, ."
+            self.state.error = self.tr("Логін: 3–32 символи, тільки латиница, цифри, _, -, .")
             self.render()
             return
 
@@ -270,7 +372,7 @@ class LogicordApp:
             return
 
         self.state.error = ""
-        self.state.success = "Аккаунт створено. Тепер увійдіть."
+        self.state.success = self.tr("Аккаунт створено. Тепер увійдіть.")
         self.state.mode = "login"
         self.render()
 
@@ -320,7 +422,7 @@ class LogicordApp:
         if not self.state.user:
             return
         if data and len(data) > MAX_ATTACHMENT_BYTES:
-            self.snack("Файл завеликий (максимум 8 MB)")
+            self.snack(self.tr("Файл завеликий (максимум 8 MB)"))
             return
         kind = self._message_kind(file_name)
         message = push_message(
@@ -336,7 +438,7 @@ class LogicordApp:
 
     async def choose_files(self, e: ft.ControlEvent | None = None) -> None:
         files = await self.file_picker.pick_files(
-            dialog_title="Виберіть файли",
+            dialog_title=self.tr("Виберіть файли"),
             allow_multiple=True,
             with_data=True,
         )
@@ -354,7 +456,7 @@ class LogicordApp:
                     return False
                 data = response.read(MAX_ATTACHMENT_BYTES + 1)
             if len(data) > MAX_ATTACHMENT_BYTES:
-                self.snack("Зображення завелике (максимум 8 MB)")
+                self.snack(self.tr("Зображення завелике (максимум 8 MB)"))
                 return True
         except Exception:
             return False
@@ -374,7 +476,7 @@ class LogicordApp:
     async def open_attachment(self, msg: dict[str, Any]) -> None:
         if msg.get("file_data"):
             target = await self.file_picker.save_file(
-                dialog_title="Зберегти файл",
+                dialog_title=self.tr("Зберегти файл"),
                 file_name=msg.get("file_name") or "download",
                 src_bytes=msg["file_data"],
             )
@@ -384,7 +486,7 @@ class LogicordApp:
             return
         target = msg.get("file_url") or msg.get("file_path")
         if not target:
-            self.snack("Файл доступний у повідомленні, але шлях не збережено")
+            self.snack(self.tr("Файл доступний у повідомленні, але шлях не збережено"))
             return
         if msg.get("file_url"):
             self.page.launch_url(target)
@@ -417,18 +519,18 @@ class LogicordApp:
 
         profile = self.state.profile or get_profile(self.state.user["id"]) or {}
         display_name_field = ft.TextField(
-            label="Ім'я в чаті",
+            label=self.tr("Ім'я в чаті"),
             value=profile.get("display_name") or self.state.user["username"],
             width=320,
         )
         avatar_dd = ft.Dropdown(
-            label="Аватар",
+            label=self.tr("Аватар"),
             value=profile.get("avatar") or "😀",
             width=320,
             options=[ft.dropdown.Option(a) for a in AVATARS],
         )
         bio_field = ft.TextField(
-            label="Про мене",
+            label=self.tr("Про мене"),
             value=profile.get("bio") or "",
             multiline=True,
             min_lines=3,
@@ -436,7 +538,7 @@ class LogicordApp:
             width=320,
         )
         theme_dd = ft.Dropdown(
-            label="Тема",
+            label=self.tr("Тема"),
             value=self.state.theme,
             width=320,
             options=[ft.dropdown.Option(k) for k in THEMES.keys()],
@@ -468,13 +570,13 @@ class LogicordApp:
                 self.profile_name.value = self.state.profile["display_name"]
                 self.profile_avatar.value = self.state.profile["avatar"]
             self._broadcast_presence()
-            self.snack("Профіль оновлено")
+            self.snack(self.tr("Профіль оновлено"))
             dlg.open = False
             self.page.update()
 
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Профіль"),
+            title=ft.Text(self.tr("Профіль")),
             content=ft.Container(
                 width=360,
                 content=ft.Column(
@@ -484,8 +586,8 @@ class LogicordApp:
                 ),
             ),
             actions=[
-                ft.TextButton("Відміна", on_click=lambda e: self.close_dialog(dlg)),
-                ft.FilledButton("Зберегти", on_click=save),
+                ft.TextButton(self.tr("Відміна"), on_click=lambda e: self.close_dialog(dlg)),
+                ft.FilledButton(self.tr("Зберегти"), on_click=save),
             ],
         )
         self.page.dialog = dlg
@@ -499,7 +601,7 @@ class LogicordApp:
     def open_theme_menu(self) -> None:
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Тема"),
+            title=ft.Text(self.tr("Тема")),
             content=ft.Column(
                 [
                     self.pill_button("Dark", lambda e: self._choose_theme("dark", dlg), self.state.theme == "dark"),
@@ -508,7 +610,7 @@ class LogicordApp:
                 ],
                 tight=True,
             ),
-            actions=[ft.TextButton("Закрыть", on_click=lambda e: self.close_dialog(dlg))],
+            actions=[ft.TextButton(self.tr("Закрыть"), on_click=lambda e: self.close_dialog(dlg))],
         )
         self.page.dialog = dlg
         dlg.open = True
@@ -584,7 +686,7 @@ class LogicordApp:
             [self.build_online_user(user) for user in users]
             if users else [ft.Container(
                 padding=12,
-                content=ft.Text("Наразі нікого немає онлайн", color=self.palette()["muted"], size=11),
+                content=ft.Text(self.tr("Наразі нікого немає онлайн"), color=self.palette()["muted"], size=11),
             )]
         )
         if self.online_column:
@@ -595,7 +697,7 @@ class LogicordApp:
                 self.build_online_user(user) for user in users
             ] if users else [ft.Container(
                 padding=12,
-                content=ft.Text("Наразі нікого немає онлайн", color=self.palette()["muted"], size=11),
+                content=ft.Text(self.tr("Наразі нікого немає онлайн"), color=self.palette()["muted"], size=11),
             )]
             self.all_online_column.update()
         if self.online_count_label:
@@ -625,9 +727,9 @@ class LogicordApp:
                     ),
                     ft.Column(
                         [
-                            ft.Text(user.get("display_name") or user.get("username", "Користувач"),
+                            ft.Text(user.get("display_name") or user.get("username", self.tr("Користувач")),
                                     color=p["text"], size=11, max_lines=1),
-                            ft.Text("У мережі", color="#43D9A3", size=10),
+                            ft.Text(self.tr("У мережі"), color="#43D9A3", size=10),
                         ], spacing=1, tight=True, expand=True,
                     ),
                 ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -676,7 +778,7 @@ class LogicordApp:
                 logo,
                 ft.Text(APP_NAME, size=31, weight=ft.FontWeight.BOLD, color=p["text"]),
                 ft.Text(
-                    "Найкращий чат у MAX, точно!",
+                    self.tr("Найкращий чат у MAX, точно!"),
                     size=13,
                     color=p["muted"],
                     text_align=ft.TextAlign.CENTER,
@@ -688,11 +790,11 @@ class LogicordApp:
         )
 
         features = [
-            (ft.Icons.BOLT, "Гнучкий інтерфейс"),
-            (ft.Icons.SHIELD_OUTLINED, "Швидка реєстрація"),
-            (ft.Icons.PALETTE_OUTLINED, "Багато функцій"),
-            (ft.Icons.TUNE, "Гнучкість налаштування"),
-            (ft.Icons.AUTO_AWESOME, "Темні акцентні теми"),
+            (ft.Icons.BOLT, self.tr("Гнучкий інтерфейс")),
+            (ft.Icons.SHIELD_OUTLINED, self.tr("Швидка реєстрація")),
+            (ft.Icons.PALETTE_OUTLINED, self.tr("Багато функцій")),
+            (ft.Icons.TUNE, self.tr("Гнучкість налаштування")),
+            (ft.Icons.AUTO_AWESOME, self.tr("Темні акцентні теми")),
         ]
         feature_rows = []
         for icon, label in features:
@@ -730,8 +832,11 @@ class LogicordApp:
                     title,
                     ft.Container(height=14),
                     ft.Column(feature_rows, spacing=11, tight=True),
-                    ft.Container(height=14),
-                    ft.Text("ОБЕРІТЬ СВОЮ ТЕМУ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.Container(height=10),
+                    ft.Text(self.tr("ЯЗЫК / LANGUAGE") if self.state.language == "ru" else self.tr("ЯЗЫК / LANGUAGE"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    self.language_picker(),
+                    ft.Container(height=10),
+                    ft.Text(self.tr("ОБЕРІТЬ СВОЮ ТЕМУ"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Row(
                         [
                             self.pill_button("Dark", lambda e: self.set_theme("dark"), self.state.theme == "dark"),
@@ -751,18 +856,18 @@ class LogicordApp:
         )
 
         # Authentication controls intentionally keep the original workflow and layout.
-        login_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value))
+        login_username = ft.TextField(label=self.tr("Логін"), width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value))
         login_password = ft.TextField(
-            label="Пароль", width=320, password=True,
+            label=self.tr("Пароль"), width=320, password=True,
             can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
             on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value),
         )
-        login_remember = ft.Checkbox(label="Запам'ятати мене", value=True)
+        login_remember = ft.Checkbox(label=self.tr("Запам'ятати мене"), value=True)
 
-        reg_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.register(reg_username.value, reg_password.value, reg_display_name.value, reg_avatar.value))
-        reg_display_name = ft.TextField(label="Ім'я в чаті", width=320, prefix_icon=ft.Icons.BADGE_OUTLINED)
+        reg_username = ft.TextField(label=self.tr("Логін"), width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.register(reg_username.value, reg_password.value, reg_display_name.value, reg_avatar.value))
+        reg_display_name = ft.TextField(label=self.tr("Ім'я в чаті"), width=320, prefix_icon=ft.Icons.BADGE_OUTLINED)
         reg_password = ft.TextField(
-            label="Пароль", width=320, password=True,
+            label=self.tr("Пароль"), width=320, password=True,
             can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
             on_submit=lambda e: self.register(
                 reg_username.value, reg_password.value,
@@ -770,7 +875,7 @@ class LogicordApp:
             ),
         )
         reg_avatar = ft.Dropdown(
-            label="Аватар", width=320, value="😀",
+            label=self.tr("Аватар"), width=320, value="😀",
             options=[ft.dropdown.Option(a) for a in AVATARS],
         )
 
@@ -787,17 +892,17 @@ class LogicordApp:
 
         login_form = ft.Column(
             [
-                ft.Text("Вхід", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
+                ft.Text(self.tr("Вхід"), size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
                 login_username, login_password, login_remember,
                 ft.Row(
                     [
                         self.primary_button(
-                            "Увійти",
+                            self.tr("Увійти"),
                             lambda e: self.login(
                                 login_username.value, login_password.value, login_remember.value
                             ),
                         ),
-                        ft.TextButton("Реєстрація", on_click=lambda e: self.toggle_mode("register")),
+                        ft.TextButton(self.tr("Реєстрація"), on_click=lambda e: self.toggle_mode("register")),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
@@ -805,18 +910,18 @@ class LogicordApp:
         )
         register_form = ft.Column(
             [
-                ft.Text("Реєстрація", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
+                ft.Text(self.tr("Реєстрація"), size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
                 reg_username, reg_display_name, reg_password, reg_avatar,
                 ft.Row(
                     [
                         self.primary_button(
-                            "Створити обліковий запис",
+                            self.tr("Створити обліковий запис"),
                             lambda e: self.register(
                                 reg_username.value, reg_password.value,
                                 reg_display_name.value, reg_avatar.value,
                             ),
                         ),
-                        ft.TextButton("Вхід", on_click=lambda e: self.toggle_mode("login")),
+                        ft.TextButton(self.tr("Вхід"), on_click=lambda e: self.toggle_mode("login")),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
             ], spacing=10, tight=True,
@@ -832,8 +937,8 @@ class LogicordApp:
                 [
                     ft.Row(
                         [
-                            self.pill_button("Вхід", lambda e: self.toggle_mode("login"), self.state.mode == "login"),
-                            self.pill_button("Реєстрація", lambda e: self.toggle_mode("register"), self.state.mode == "register"),
+                            self.pill_button(self.tr("Вхід"), lambda e: self.toggle_mode("login"), self.state.mode == "login"),
+                            self.pill_button(self.tr("Реєстрація"), lambda e: self.toggle_mode("register"), self.state.mode == "register"),
                         ],
                         alignment=ft.MainAxisAlignment.START,
                     ),
@@ -857,7 +962,7 @@ class LogicordApp:
         bubble_bg = p["bubble_self"] if own else p["bubble_other"]
         text_color = "#FFFFFF" if own else p["text"]
         avatar = msg.get("avatar") or "😀"
-        display_name = msg.get("display_name") or msg.get("username") or "Користувач"
+        display_name = msg.get("display_name") or msg.get("username") or self.tr("Користувач")
 
         header = ft.Row(
             [
@@ -897,9 +1002,9 @@ class LogicordApp:
                         ),
                         ft.Column(
                             [
-                                ft.Text(msg.get("file_name") or ("Відео" if is_video else "Файл"),
+                                ft.Text(msg.get("file_name") or (self.tr("Відео") if is_video else self.tr("Файл")),
                                         color=text_color, weight=ft.FontWeight.BOLD, size=12),
-                                ft.Text("Натисніть, щоб відкрити", color=p["muted"], size=10),
+                                ft.Text(self.tr("Натисніть, щоб відкрити"), color=p["muted"], size=10),
                             ], spacing=3, tight=True, expand=True,
                         ),
                         ft.Icon(ft.Icons.DOWNLOAD_OUTLINED, color=p["muted"], size=18),
@@ -949,7 +1054,7 @@ class LogicordApp:
 
         self.online_column = ft.Column(
             [self.build_online_user(user) for user in ONLINE_USERS.values()] or [
-                ft.Container(padding=12, content=ft.Text("Наразі нікого немає онлайн", color=p["muted"], size=11))
+                ft.Container(padding=12, content=ft.Text(self.tr("Наразі нікого немає онлайн"), color=p["muted"], size=11))
             ],
             spacing=7,
             scroll=ft.ScrollMode.AUTO,
@@ -971,7 +1076,7 @@ class LogicordApp:
                         ft.Text(APP_NAME, size=17, weight=ft.FontWeight.BOLD, color=p["text"]),
                         ft.Row(
                             [ft.Container(width=7, height=7, border_radius=4, bgcolor="#43D9A3"),
-                             ft.Text("Простір спілкування", size=10, color=p["muted"])],
+                             ft.Text(self.tr("Простір спілкування"), size=10, color=p["muted"])],
                             spacing=5,
                         ),
                     ], spacing=2, tight=True, expand=True,
@@ -988,38 +1093,40 @@ class LogicordApp:
                     brand,
                     ft.Container(height=8),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.Text("РОБОЧИЙ ПРОСТІР", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.Text(self.tr("РОБОЧИЙ ПРОСТІР"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Container(
                         padding=ft.Padding(11, 9, 11, 9), border_radius=12,
                         bgcolor=p["panel_2"],
-                        on_click=lambda e: self.snack("Ви вже перебуваєте в загальному чаті"),
+                        on_click=lambda e: self.snack(self.tr("Ви вже перебуваєте в загальному чаті")),
                         ink=True,
                         content=ft.Row(
                             [ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, color=p["accent"], size=19),
-                             ft.Text("Загальний чат", color=p["text"], size=13, weight=ft.FontWeight.W_500),
+                             ft.Text(self.tr("Загальний чат"), color=p["text"], size=13, weight=ft.FontWeight.W_500),
                              ft.Container(expand=True),
                              ft.Icon(ft.Icons.CHEVRON_RIGHT, color=p["muted"], size=17)], spacing=8,
                         ),
                     ),
-                    ft.Text("НАЛАШТУВАННЯ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
-                    ft.TextButton("👤  Профіль", on_click=lambda e: self.open_profile(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
-                    ft.TextButton("🎨  Змінити тему", on_click=lambda e: self.open_theme_menu(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
+                    ft.Text(self.tr("Язык / Language"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    self.language_picker(),
+                    ft.Text(self.tr("НАЛАШТУВАННЯ"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.TextButton(self.tr("👤  Профіль"), on_click=lambda e: self.open_profile(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
+                    ft.TextButton(self.tr("🎨  Змінити тему"), on_click=lambda e: self.open_theme_menu(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
                     ft.Divider(height=1, color=p["stroke"]),
                     ft.Row(
-                        [ft.Text("УЧАСНИКИ ОНЛАЙН", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                        [ft.Text(self.tr("УЧАСНИКИ ОНЛАЙН"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                          ft.Container(expand=True),
                          ft.Container(padding=ft.Padding(6, 2, 6, 2), border_radius=8,
                                       bgcolor=p["panel_2"], content=self.online_count_label)],
                     ),
                     ft.Container(expand=True, content=self.online_column),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.TextButton("🚪  Вийти з акаунта", on_click=lambda e: self.logout(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
+                    ft.TextButton(self.tr("🚪  Вийти з акаунта"), on_click=lambda e: self.logout(), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12), padding=ft.Padding(12, 8, 12, 8))),
                 ], spacing=8, expand=True,
             ),
         )
 
         self.state.message_field = ft.TextField(
-            hint_text="Напишіть повідомлення…",
+            hint_text=self.tr("Напишіть повідомлення…"),
             expand=True,
             multiline=True,
             min_lines=1,
@@ -1056,15 +1163,15 @@ class LogicordApp:
                 [
                     ft.Row(
                         [
-                            ft.IconButton(icon=ft.Icons.ATTACH_FILE, tooltip="Додати файл", on_click=self.choose_files),
-                            ft.IconButton(icon=ft.Icons.EMOJI_EMOTIONS_OUTLINED, tooltip="Емодзі",
+                            ft.IconButton(icon=ft.Icons.ATTACH_FILE, tooltip=self.tr("Додати файл"), on_click=self.choose_files),
+                            ft.IconButton(icon=ft.Icons.EMOJI_EMOTIONS_OUTLINED, tooltip=self.tr("Емодзі"),
                                           on_click=lambda e: self.toggle_emoji_panel()),
                             self.state.message_field,
                             ft.Container(
                                 border_radius=13, bgcolor=p["accent"],
                                 content=ft.IconButton(
                                     icon=ft.Icons.SEND_ROUNDED, icon_color="#FFFFFF",
-                                    tooltip="Надіслати", on_click=lambda e: self.send_message(),
+                                    tooltip=self.tr("Надіслати"), on_click=lambda e: self.send_message(),
                                 ),
                             ),
                         ], spacing=5, vertical_alignment=ft.CrossAxisAlignment.END,
@@ -1088,8 +1195,8 @@ class LogicordApp:
                             ),
                             ft.Column(
                                 [
-                                    ft.Text("Загальний чат", size=18, weight=ft.FontWeight.BOLD, color=p["text"]),
-                                    ft.Text("Спілкуйтеся та діліться файлами", size=11, color=p["muted"]),
+                                    ft.Text(self.tr("Загальний чат"), size=18, weight=ft.FontWeight.BOLD, color=p["text"]),
+                                    ft.Text(self.tr("Спілкуйтеся та діліться файлами"), size=11, color=p["muted"]),
                                 ], spacing=2, tight=True, expand=True,
                             ),
                             ft.OutlinedButton(
@@ -1109,7 +1216,7 @@ class LogicordApp:
         profile = self.state.profile or {}
         self.all_online_column = ft.Column(
             [self.build_online_user(user) for user in ONLINE_USERS.values()] or [
-                ft.Container(padding=12, content=ft.Text("Наразі нікого немає онлайн", color=p["muted"], size=11))
+                ft.Container(padding=12, content=ft.Text(self.tr("Наразі нікого немає онлайн"), color=p["muted"], size=11))
             ],
             spacing=7,
             scroll=ft.ScrollMode.AUTO,
@@ -1120,7 +1227,7 @@ class LogicordApp:
             bgcolor=p["panel"], border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
-                    ft.Text("ВАШ ПРОФІЛЬ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.Text(self.tr("ВАШ ПРОФІЛЬ"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Container(
                         padding=14, border_radius=17, bgcolor=p["panel_2"],
                         content=ft.Column(
@@ -1141,13 +1248,13 @@ class LogicordApp:
                                         color=p["accent"], size=10, weight=ft.FontWeight.BOLD,
                                     ),
                                 ),
-                                ft.OutlinedButton("Редагувати профіль", icon=ft.Icons.EDIT_OUTLINED,
+                                ft.OutlinedButton(self.tr("Редагувати профіль"), icon=ft.Icons.EDIT_OUTLINED,
                                                   on_click=lambda e: self.open_profile()),
                             ], spacing=7, horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                     ),
                     ft.Divider(height=1, color=p["stroke"]),
-                    ft.Text("ШВИДКІ ТЕМИ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.Text(self.tr("ШВИДКІ ТЕМИ"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Row(
                         [
                             ft.IconButton(icon=ft.Icons.DARK_MODE_OUTLINED, tooltip="Dark",
@@ -1161,7 +1268,7 @@ class LogicordApp:
                     ft.Divider(height=1, color=p["stroke"]),
                     ft.Row(
                         [
-                            ft.Text("ОНЛАЙН ЗАРАЗ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                            ft.Text(self.tr("ОНЛАЙН ЗАРАЗ"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                             ft.Container(expand=True),
                             ft.Icon(ft.Icons.CIRCLE, size=7, color="#43D9A3"),
                         ],
