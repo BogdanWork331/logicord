@@ -1,4 +1,5 @@
 flet==0.85.3
+fastapi<0.145
 bcrypt
 cffi
 wheel
