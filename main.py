@@ -534,21 +534,31 @@ class LogicordApp:
         p = self.palette()
         return ft.Container(
             padding=8,
+            border_radius=11,
             bgcolor=p["panel_2"],
             content=ft.Row(
                 [
-                    ft.Text(user["avatar"], size=14),
+                    ft.Stack(
+                        controls=[
+                            ft.Container(
+                                width=31, height=31, border_radius=16,
+                                bgcolor=p["bg"], alignment=ft.Alignment(0, 0),
+                                content=ft.Text(user.get("avatar") or "😀", size=16),
+                            ),
+                            ft.Container(
+                                width=8, height=8, border_radius=4,
+                                bgcolor="#43D9A3", border=ft.Border.all(1, p["panel_2"]),
+                            ),
+                        ],
+                    ),
                     ft.Column(
                         [
-                            ft.Text(user["display_name"], color=p["text"], size=12),
-                            ft.Text(user["username"], color=p["muted"], size=10),
-                        ],
-                        spacing=0,
-                        tight=True,
+                            ft.Text(user.get("display_name") or user.get("username", "Користувач"),
+                                    color=p["text"], size=11, max_lines=1),
+                            ft.Text("У мережі", color="#43D9A3", size=10),
+                        ], spacing=1, tight=True, expand=True,
                     ),
-                ],
-                spacing=8,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         )
 
@@ -570,135 +580,169 @@ class LogicordApp:
     def build_auth(self) -> ft.Control:
         p = self.palette()
 
+        # Left branding panel: gradient, glow and compact feature list.
+        logo = ft.Container(
+            width=78,
+            height=78,
+            border_radius=23,
+            alignment=ft.Alignment(0, 0),
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment(-1, -1),
+                end=ft.Alignment(1, 1),
+                colors=[p["accent"], "#6255F5", "#3930A8"],
+            ),
+            shadow=ft.BoxShadow(
+                blur_radius=26,
+                spread_radius=1,
+                color=p["accent"],
+                offset=ft.Offset(0, 0),
+            ),
+            content=ft.Text("LoGi", size=27, weight=ft.FontWeight.BOLD, color="#FFFFFF"),
+        )
         title = ft.Column(
             [
-                ft.Container(
-                    width=72,
-                    height=72,
-                    border_radius=20,
-                    alignment=ft.Alignment(0, 0),
-                    bgcolor=p["accent"],
-                    content=ft.Text("LoGi", size=30, weight=ft.FontWeight.BOLD, color="white"),
+                logo,
+                ft.Text(APP_NAME, size=31, weight=ft.FontWeight.BOLD, color=p["text"]),
+                ft.Text(
+                    "Найкращий чат у MAX, точно!",
+                    size=13,
+                    color=p["muted"],
+                    text_align=ft.TextAlign.CENTER,
                 ),
-                ft.Text(APP_NAME, size=30, weight=ft.FontWeight.BOLD, color=p["text"]),
-                ft.Text("Найкращий чат(кращий ніж MAX точно)", size=13, color=p["muted"]),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=10,
+            spacing=11,
+            tight=True,
         )
+
+        features = [
+            (ft.Icons.BOLT, "Гнучкий інтерфейс"),
+            (ft.Icons.SHIELD_OUTLINED, "Швидка реєстрація"),
+            (ft.Icons.PALETTE_OUTLINED, "Багато функцій"),
+            (ft.Icons.TUNE, "Гнучкість налаштування"),
+            (ft.Icons.AUTO_AWESOME, "Темні акцентні теми"),
+        ]
+        feature_rows = []
+        for icon, label in features:
+            feature_rows.append(
+                ft.Row(
+                    [
+                        ft.Container(
+                            width=36,
+                            height=36,
+                            border_radius=12,
+                            bgcolor=p["panel_2"],
+                            border=ft.Border.all(1, p["stroke"]),
+                            alignment=ft.Alignment(0, 0),
+                            content=ft.Icon(icon, size=19, color=p["accent"]),
+                        ),
+                        ft.Text(label, size=13, color=p["text"], weight=ft.FontWeight.W_500),
+                    ],
+                    spacing=11,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                )
+            )
 
         intro = ft.Container(
             expand=1,
             padding=30,
             border_radius=24,
-            bgcolor=p["panel"],
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment(-1, -1),
+                end=ft.Alignment(1, 1),
+                colors=[p["panel"], p["bg"], p["panel_2"]],
+            ),
+            border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     title,
-                    ft.Container(height=8),
-                    ft.Text("• Гнучкий інтерфейс", color=p["text"]),
-                    ft.Text("• Швидка реєстрація", color=p["text"]),
-                    ft.Text("• Багато функцій", color=p["text"]),
-                    ft.Text("• Гнучкість налаштування", color=p["text"]),
-                    ft.Text("• Темні акцентні теми", color=p["text"]),
-                    ft.Container(height=16),
+                    ft.Container(height=14),
+                    ft.Column(feature_rows, spacing=11, tight=True),
+                    ft.Container(height=14),
+                    ft.Text("ОБЕРІТЬ СВОЮ ТЕМУ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Row(
                         [
                             ft.OutlinedButton("Dark", on_click=lambda e: self.set_theme("dark")),
                             ft.OutlinedButton("Purple", on_click=lambda e: self.set_theme("purple")),
                             ft.OutlinedButton("Emerald", on_click=lambda e: self.set_theme("emerald")),
                         ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=8,
                         wrap=True,
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=8,
+                spacing=7,
+                scroll=ft.ScrollMode.AUTO,
             ),
         )
 
-        login_username = ft.TextField(label="Логін", width=320)
-        login_password = ft.TextField(label="Пароль", width=320, password=True, can_reveal_password=True)
+        # Authentication controls intentionally keep the original workflow and layout.
+        login_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE)
+        login_password = ft.TextField(
+            label="Пароль", width=320, password=True,
+            can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
+        )
         login_remember = ft.Checkbox(label="Запам'ятати мене", value=True)
 
-        reg_username = ft.TextField(label="Логін", width=320)
-        reg_display_name = ft.TextField(label="Ім'я в чаті", width=320)
-        reg_password = ft.TextField(label="Пароль", width=320, password=True, can_reveal_password=True)
+        reg_username = ft.TextField(label="Логін", width=320, prefix_icon=ft.Icons.PERSON_OUTLINE)
+        reg_display_name = ft.TextField(label="Ім'я в чаті", width=320, prefix_icon=ft.Icons.BADGE_OUTLINED)
+        reg_password = ft.TextField(
+            label="Пароль", width=320, password=True,
+            can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
+        )
         reg_avatar = ft.Dropdown(
-            label="Аватар",
-            width=320,
-            value="😀",
+            label="Аватар", width=320, value="😀",
             options=[ft.dropdown.Option(a) for a in AVATARS],
         )
 
         error_box = ft.Container(
-            visible=bool(self.state.error),
-            padding=10,
-            border_radius=12,
-            bgcolor=p["panel"],
-            border=ft.Border.all(1, p["danger"]),
+            visible=bool(self.state.error), padding=10, border_radius=12,
+            bgcolor=p["panel"], border=ft.Border.all(1, p["danger"]),
             content=ft.Text(self.state.error, color=p["danger"], size=12),
         )
-
         success_box = ft.Container(
-            visible=bool(self.state.success),
-            padding=10,
-            border_radius=12,
-            bgcolor=p["panel"],
-            border=ft.Border.all(1, p["accent"]),
+            visible=bool(self.state.success), padding=10, border_radius=12,
+            bgcolor=p["panel"], border=ft.Border.all(1, p["accent"]),
             content=ft.Text(self.state.success, color=p["accent"], size=12),
         )
 
         login_form = ft.Column(
             [
                 ft.Text("Вхід", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
-                login_username,
-                login_password,
-                login_remember,
+                login_username, login_password, login_remember,
                 ft.Row(
                     [
                         ft.FilledButton(
                             "Ввійти",
                             on_click=lambda e: self.login(
-                                login_username.value,
-                                login_password.value,
-                                login_remember.value,
+                                login_username.value, login_password.value, login_remember.value
                             ),
                         ),
                         ft.TextButton("Реєстрація", on_click=lambda e: self.toggle_mode("register")),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-            ],
-            spacing=10,
-            tight=True,
+            ], spacing=10, tight=True,
         )
-
         register_form = ft.Column(
             [
                 ft.Text("Реєстрація", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
-                reg_username,
-                reg_display_name,
-                reg_password,
-                reg_avatar,
+                reg_username, reg_display_name, reg_password, reg_avatar,
                 ft.Row(
                     [
                         ft.FilledButton(
                             "Створити обліковий запис",
                             on_click=lambda e: self.register(
-                                reg_username.value,
-                                reg_password.value,
-                                reg_display_name.value,
-                                reg_avatar.value,
+                                reg_username.value, reg_password.value,
+                                reg_display_name.value, reg_avatar.value,
                             ),
                         ),
                         ft.TextButton("Вхід", on_click=lambda e: self.toggle_mode("login")),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-            ],
-            spacing=10,
-            tight=True,
+            ], spacing=10, tight=True,
         )
 
         form_card = ft.Container(
@@ -720,107 +764,106 @@ class LogicordApp:
                     login_form if self.state.mode == "login" else register_form,
                     error_box,
                     success_box,
-                ],
-                spacing=12,
-                tight=True,
+                ], spacing=12, tight=True,
             ),
         )
 
         return ft.Container(
             expand=True,
-            padding=20,
-            content=ft.Row(
-                [
-                    intro,
-                    form_card,
-                ],
-                spacing=20,
-            ),
+            padding=12,
+            content=ft.Row([intro, form_card], spacing=14, expand=True),
         )
-#МЕНЮ АВТОРІЗАЦІІ!!! -----------------------------------------
 
     def build_message(self, msg: dict[str, Any]) -> ft.Control:
         p = self.palette()
-        own = self.state.user and msg["user_id"] == self.state.user["id"]
+        own = bool(self.state.user and msg.get("user_id") == self.state.user["id"])
         bubble_bg = p["bubble_self"] if own else p["bubble_other"]
-        text_color = "white" if own else p["text"]
+        text_color = "#FFFFFF" if own else p["text"]
+        avatar = msg.get("avatar") or "😀"
+        display_name = msg.get("display_name") or msg.get("username") or "Користувач"
 
         header = ft.Row(
             [
-                ft.Text(
-                    f'{msg["avatar"]} {msg["display_name"]}',
-                    size=12,
-                    weight=ft.FontWeight.BOLD,
-                    color=text_color,
-                ),
-                ft.Text(msg["time"], size=10, color=text_color),
+                ft.Text(display_name, size=12, weight=ft.FontWeight.BOLD, color=text_color),
+                ft.Text(msg.get("time", ""), size=10, color=text_color),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            spacing=18,
         )
 
-        body: ft.Control
         kind = msg.get("kind", "text")
         if kind == "image" and (msg.get("file_data") or msg.get("file_url") or msg.get("file_path")):
-            body = ft.Image(
-            src=msg.get("file_data") or msg.get("file_url") or msg.get("file_path"),
-                width=320,
-                height=240,
-                fit=ft.BoxFit.CONTAIN,
+            body: ft.Control = ft.Image(
+                src=msg.get("file_data") or msg.get("file_url") or msg.get("file_path"),
+                width=320, height=240, fit=ft.BoxFit.CONTAIN,
+                border_radius=12, cache_width=640, cache_height=480,
+            )
+        elif kind in ("video", "file"):
+            async def download_attachment(e: ft.ControlEvent, message: dict[str, Any] = msg) -> None:
+                await self.open_attachment(message)
+
+            is_video = kind == "video"
+            body = ft.Container(
+                padding=12,
                 border_radius=12,
-                cache_width=640,
-                cache_height=480,
-            )
-        elif kind == "video":
-            async def download_video(e: ft.ControlEvent, message: dict[str, Any] = msg) -> None:
-                await self.open_attachment(message)
-
-            body = ft.Container(
-                padding=12,
                 bgcolor=p["panel_2"],
-                border_radius=10,
-                on_click=download_video,
-                content=ft.Row([
-                    ft.Icon(ft.Icons.VIDEO_FILE, color=p["accent"]),
-                    ft.Text(msg.get("file_name") or "Відео", color=text_color),
-                ]),
-            )
-        elif kind == "file":
-            async def download_file(e: ft.ControlEvent, message: dict[str, Any] = msg) -> None:
-                await self.open_attachment(message)
-
-            body = ft.Container(
-                padding=12,
-                bgcolor=p["panel_2"],
-                border_radius=10,
-                on_click=download_file,
-                content=ft.Row([
-                    ft.Icon(ft.Icons.ATTACH_FILE, color=p["accent"]),
-                    ft.Column([
-                        ft.Text(msg.get("file_name") or "Файл", color=text_color, weight=ft.FontWeight.BOLD),
-                        ft.Text("Натисніть, щоб завантажити", color=p["muted"], size=11),
-                    ], spacing=2, tight=True),
-                ]),
+                on_click=download_attachment,
+                content=ft.Row(
+                    [
+                        ft.Container(
+                            width=40, height=40, border_radius=11,
+                            bgcolor=p["panel"], alignment=ft.Alignment(0, 0),
+                            content=ft.Icon(
+                                ft.Icons.VIDEO_FILE if is_video else ft.Icons.INSERT_DRIVE_FILE_OUTLINED,
+                                color=p["accent"], size=22,
+                            ),
+                        ),
+                        ft.Column(
+                            [
+                                ft.Text(msg.get("file_name") or ("Відео" if is_video else "Файл"),
+                                        color=text_color, weight=ft.FontWeight.BOLD, size=12),
+                                ft.Text("Натисніть, щоб відкрити", color=p["muted"], size=10),
+                            ], spacing=3, tight=True, expand=True,
+                        ),
+                        ft.Icon(ft.Icons.DOWNLOAD_OUTLINED, color=p["muted"], size=18),
+                    ], spacing=10,
+                ),
             )
         else:
-            body = ft.Text(msg["text"], color=text_color, selectable=True)
+            body = ft.Text(msg.get("text", ""), color=text_color, size=13, selectable=True)
 
+        bubble = ft.Container(
+            padding=13,
+            border_radius=ft.BorderRadius(18, 18, 5 if own else 18, 18),
+            bgcolor=bubble_bg,
+            border=ft.Border.all(1, p["stroke"]),
+            content=ft.Column([header, ft.Container(height=5), body], spacing=0, tight=True),
+        )
         return ft.Container(
-            key=f"message-{msg['id']}",
-            width=520,
+            key=f"message-{msg.get('id', id(msg))}",
             alignment=ft.Alignment(1, 0) if own else ft.Alignment(-1, 0),
-            content=ft.Container(
-                padding=12,
-                border_radius=18,
-                bgcolor=bubble_bg,
-                border=ft.Border.all(1, p["stroke"]),
-                content=ft.Column(
-                    [
-                        header,
-                        ft.Container(height=4),
-                        body,
-                    ],
-                    spacing=0,
-                ),
+            padding=ft.Padding(6, 2, 6, 2),
+            content=ft.Row(
+                [
+                    *([] if own else [
+                        ft.Container(
+                            width=34, height=34, border_radius=17,
+                            bgcolor=p["panel"], alignment=ft.Alignment(0, 0),
+                            content=ft.Text(avatar, size=17),
+                        )
+                    ]),
+                    ft.Container(content=bubble, width=520),
+                    *([] if not own else [
+                        ft.Container(
+                            width=34, height=34, border_radius=17,
+                            bgcolor=p["panel"], alignment=ft.Alignment(0, 0),
+                            content=ft.Text(avatar, size=17),
+                        )
+                    ]),
+                ],
+                alignment=ft.MainAxisAlignment.END if own else ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+                spacing=8,
             ),
         )
 
@@ -829,246 +872,234 @@ class LogicordApp:
 
         self.online_column = ft.Column(
             [self.build_online_user(user) for user in ONLINE_USERS.values()],
-            spacing=8,
+            spacing=7,
             scroll=ft.ScrollMode.AUTO,
         )
 
+        brand = ft.Row(
+            [
+                ft.Container(
+                    width=43, height=43, border_radius=14,
+                    alignment=ft.Alignment(0, 0),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
+                        colors=[p["accent"], "#5146E5"],
+                    ),
+                    content=ft.Text("L", color="white", size=22, weight=ft.FontWeight.BOLD),
+                ),
+                ft.Column(
+                    [
+                        ft.Text(APP_NAME, size=17, weight=ft.FontWeight.BOLD, color=p["text"]),
+                        ft.Row(
+                            [ft.Container(width=7, height=7, border_radius=4, bgcolor="#43D9A3"),
+                             ft.Text("Простір спілкування", size=10, color=p["muted"])],
+                            spacing=5,
+                        ),
+                    ], spacing=2, tight=True, expand=True,
+                ),
+            ], spacing=10,
+        )
+
         sidebar = ft.Container(
-            width=230,
-            padding=14,
-            border_radius=24,
-            bgcolor=p["panel"],
+            width=224, padding=14, border_radius=22,
+            bgcolor=p["panel"], border=ft.Border.all(1, p["stroke"]),
+            content=ft.Column(
+                [
+                    brand,
+                    ft.Container(height=8),
+                    ft.Divider(height=1, color=p["stroke"]),
+                    ft.Text("РОБОЧИЙ ПРОСТІР", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.Container(
+                        padding=ft.Padding(11, 9, 11, 9), border_radius=12,
+                        bgcolor=p["panel_2"],
+                        content=ft.Row(
+                            [ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, color=p["accent"], size=19),
+                             ft.Text("Загальний чат", color=p["text"], size=13, weight=ft.FontWeight.W_500),
+                             ft.Container(expand=True),
+                             ft.Icon(ft.Icons.CHEVRON_RIGHT, color=p["muted"], size=17)], spacing=8,
+                        ),
+                    ),
+                    ft.Text("НАЛАШТУВАННЯ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.TextButton("👤  Профіль", on_click=lambda e: self.open_profile()),
+                    ft.TextButton("🎨  Змінити тему", on_click=lambda e: self.open_theme_menu()),
+                    ft.Divider(height=1, color=p["stroke"]),
+                    ft.Row(
+                        [ft.Text("УЧАСНИКИ ОНЛАЙН", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                         ft.Container(expand=True),
+                         ft.Container(padding=ft.Padding(6, 2, 6, 2), border_radius=8,
+                                      bgcolor=p["panel_2"], content=ft.Text(str(len(ONLINE_USERS)), size=10, color=p["accent"]))],
+                    ),
+                    ft.Container(expand=True, content=self.online_column),
+                    ft.Divider(height=1, color=p["stroke"]),
+                    ft.TextButton("🚪  Вийти з акаунта", on_click=lambda e: self.logout()),
+                ], spacing=8, expand=True,
+            ),
+        )
+
+        self.state.message_field = ft.TextField(
+            hint_text="Напишіть повідомлення…",
+            expand=True,
+            multiline=True,
+            min_lines=1,
+            max_lines=4,
+            text_size=14,
+            border=ft.InputBorder.NONE,
+            filled=False,
+            content_padding=ft.Padding(8, 10, 8, 10),
+            on_submit=lambda e: self.send_message(),
+        )
+        self.messages_column = ft.ListView(
+            controls=[self.build_message(msg) for msg in get_recent_messages(70)],
+            spacing=5, scroll=ft.ScrollMode.AUTO, expand=True,
+            auto_scroll=False, on_scroll=self.on_messages_scroll,
+        )
+
+        self.emoji_panel = ft.Container(
+            visible=self.state.emoji_open,
+            padding=10, border_radius=14, bgcolor=p["panel_2"],
             border=ft.Border.all(1, p["stroke"]),
+            content=ft.Row(
+                wrap=True, spacing=6, run_spacing=6,
+                controls=[
+                    ft.OutlinedButton(e, width=42, height=36,
+                                      on_click=lambda ev, emoji=e: self.add_emoji(emoji))
+                    for e in EMOJIS
+                ],
+            ),
+        )
+        self.composer = ft.Container(
+            padding=10, border_radius=18, bgcolor=p["panel"],
+            border=ft.Border.all(1, p["stroke"]),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.IconButton(icon=ft.Icons.ATTACH_FILE, tooltip="Додати файл", on_click=self.choose_files),
+                            ft.IconButton(icon=ft.Icons.EMOJI_EMOTIONS_OUTLINED, tooltip="Емодзі",
+                                          on_click=lambda e: self.toggle_emoji_panel()),
+                            self.state.message_field,
+                            ft.Container(
+                                border_radius=13, bgcolor=p["accent"],
+                                content=ft.IconButton(
+                                    icon=ft.Icons.SEND_ROUNDED, icon_color="#FFFFFF",
+                                    tooltip="Надіслати", on_click=lambda e: self.send_message(),
+                                ),
+                            ),
+                        ], spacing=5, vertical_alignment=ft.CrossAxisAlignment.END,
+                    ),
+                    self.emoji_panel,
+                ], spacing=8, tight=True,
+            ),
+        )
+
+        chat_area = ft.Container(
+            expand=True, padding=16, border_radius=22,
+            bgcolor=p["panel_2"], border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
                     ft.Row(
                         [
                             ft.Container(
-                                width=44,
-                                height=44,
-                                border_radius=14,
-                                alignment=ft.Alignment(0, 0),
-                                bgcolor=p["accent"],
-                                content=ft.Text("L", color="white", weight=ft.FontWeight.BOLD),
+                                width=42, height=42, border_radius=14,
+                                bgcolor=p["panel"], alignment=ft.Alignment(0, 0),
+                                content=ft.Icon(ft.Icons.FORUM_OUTLINED, color=p["accent"], size=21),
                             ),
                             ft.Column(
                                 [
-                                    ft.Text(APP_NAME, size=18, weight=ft.FontWeight.BOLD, color=p["text"]),
-                                    ft.Text("Lite chat", size=11, color=p["muted"]),
-                                ],
-                                spacing=0,
-                                tight=True,
+                                    ft.Text("Загальний чат", size=18, weight=ft.FontWeight.BOLD, color=p["text"]),
+                                    ft.Text("Спілкуйтеся та діліться файлами", size=11, color=p["muted"]),
+                                ], spacing=2, tight=True, expand=True,
                             ),
-                        ],
-                        spacing=12,
-                    ),
-                    ft.Divider(height=10, color=p["stroke"]),
-                    ft.Text("Меню", size=12, color=p["muted"]),
-                    ft.TextButton("💬 Чат", on_click=lambda e: None),
-                    ft.TextButton("👤 Профіль", on_click=lambda e: self.open_profile()),
-                    ft.TextButton("🎨 Тема", on_click=lambda e: self.open_theme_menu()),
-                    ft.TextButton("🚪 Вийти", on_click=lambda e: self.logout()),
-                    ft.Divider(height=10, color=p["stroke"]),
-                    ft.Text("Онлайн", size=12, color=p["muted"]),
-                    self.online_column,
-                ],
-                spacing=8,
-                scroll=ft.ScrollMode.AUTO,
-            ),
-        )
-
-        self.state.message_field = ft.TextField(
-            hint_text="Введіть повідомлення...",
-            height=64,
-            expand=True,
-            multiline=True,
-            min_lines=2,
-            max_lines=3,
-            text_size=16,
-            content_padding=ft.Padding(14, 10, 14, 10),
-            on_submit=lambda e: self.send_message(),
-        )
-
-        self.messages_column = ft.ListView(
-            controls=[self.build_message(msg) for msg in get_recent_messages(70)],
-            spacing=10,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True,
-            auto_scroll=False,
-            on_scroll=self.on_messages_scroll,
-        )
-
-        self.emoji_panel = ft.Container(
-            visible=self.state.emoji_open,
-            padding=8,
-            border_radius=14,
-            bgcolor=p["panel_2"],
-            content=ft.Row(
-                wrap=True,
-                spacing=6,
-                run_spacing=6,
-                controls=[
-                    ft.OutlinedButton(
-                        e,
-                        width=44,
-                        height=36,
-                        on_click=lambda ev, emoji=e: self.add_emoji(emoji),
-                    )
-                    for e in EMOJIS
-                ],
-            ),
-        )
-
-        self.composer = ft.Container(
-            padding=12,
-            border_radius=20,
-            bgcolor=p["panel"],
-            border=ft.Border.all(1, p["stroke"]),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Column(
-                                [
-                                    ft.IconButton(
-                                        icon=ft.Icons.ATTACH_FILE,
-                                        tooltip="Додати файл",
-                                        on_click=self.choose_files,
-                                    ),
-                                    ft.IconButton(
-                                        icon=ft.Icons.EMOJI_EMOTIONS,
-                                        tooltip="Емодзі",
-                                        on_click=lambda e: self.toggle_emoji_panel(),
-                                    ),
-                                ],
-                                spacing=0,
+                            ft.OutlinedButton(
+                                f"{self.state.theme.title()}",
+                                icon=ft.Icons.PALETTE_OUTLINED,
+                                on_click=lambda e: self.open_theme_menu(),
                             ),
-                            self.state.message_field,
-                            ft.FilledButton("Відправити", on_click=lambda e: self.send_message()),
-                        ],
-                        spacing=10,
-                        vertical_alignment=ft.CrossAxisAlignment.END,
-                    ),
-                    self.emoji_panel,
-                ],
-                spacing=10,
-                tight=True,
-            ),
-        )
-
-        chat_area = ft.Container(
-            expand=True,
-            padding=16,
-            border_radius=24,
-            bgcolor=p["panel_2"],
-            border=ft.Border.all(1, p["stroke"]),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Column(
-                                [
-                                    ft.Text("Чат", size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
-                                    ft.Text("Один загальний канал", size=11, color=p["muted"]),
-                                ],
-                                spacing=0,
-                                tight=True,
-                            ),
-                            ft.TextButton(f"Тема: {self.state.theme}", on_click=lambda e: self.next_theme()),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ], spacing=11,
                     ),
                     ft.Divider(height=1, color=p["stroke"]),
                     ft.Container(expand=True, content=self.messages_column),
                     self.composer,
-                ],
-                spacing=12,
-                expand=True,
+                ], spacing=12, expand=True,
             ),
         )
 
+        profile = self.state.profile or {}
         right_panel = ft.Container(
-            width=230,
-            padding=14,
-            border_radius=24,
-            bgcolor=p["panel"],
-            border=ft.Border.all(1, p["stroke"]),
+            width=220, padding=14, border_radius=22,
+            bgcolor=p["panel"], border=ft.Border.all(1, p["stroke"]),
             content=ft.Column(
                 [
-                    ft.Text("Профіль", size=12, color=p["muted"]),
+                    ft.Text("ВАШ ПРОФІЛЬ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Container(
-                        padding=12,
-                        border_radius=16,
-                        bgcolor=p["panel_2"],
+                        padding=14, border_radius=17, bgcolor=p["panel_2"],
                         content=ft.Column(
                             [
-                                self._profile_avatar_control(),
-                                self._profile_name_control(),
-                                ft.Text(self.state.user["username"], color=p["muted"], size=11),
-                                ft.Text(
-                                    f"Role: {self.state.user.get('role', 'user')}",
-                                    color=p["muted"],
-                                    size=11,
+                                ft.Container(
+                                    width=66, height=66, border_radius=33,
+                                    bgcolor=p["bg"], alignment=ft.Alignment(0, 0),
+                                    border=ft.Border.all(2, p["accent"]),
+                                    content=self._profile_avatar_control(),
                                 ),
-                                ft.TextButton("Змінити", on_click=lambda e: self.open_profile()),
-                            ],
-                            spacing=4,
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                self._profile_name_control(),
+                                ft.Text("@" + self.state.user["username"], color=p["muted"], size=11),
+                                ft.Container(
+                                    padding=ft.Padding(8, 4, 8, 4), border_radius=9,
+                                    bgcolor=p["panel"],
+                                    content=ft.Text(
+                                        str(self.state.user.get("role", "user")).upper(),
+                                        color=p["accent"], size=10, weight=ft.FontWeight.BOLD,
+                                    ),
+                                ),
+                                ft.OutlinedButton("Редагувати профіль", icon=ft.Icons.EDIT_OUTLINED,
+                                                  on_click=lambda e: self.open_profile()),
+                            ], spacing=7, horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                     ),
-                    ft.Divider(height=10, color=p["stroke"]),
-                    ft.Text("Теми", size=12, color=p["muted"]),
+                    ft.Divider(height=1, color=p["stroke"]),
+                    ft.Text("ШВИДКІ ТЕМИ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
                     ft.Row(
                         [
-                            ft.OutlinedButton("Dark", on_click=lambda e: self.set_theme("dark")),
-                            ft.OutlinedButton("Purp", on_click=lambda e: self.set_theme("purple")),
-                            ft.OutlinedButton("Emer", on_click=lambda e: self.set_theme("emerald")),
-                        ],
-                        wrap=True,
+                            ft.IconButton(icon=ft.Icons.DARK_MODE_OUTLINED, tooltip="Dark",
+                                          on_click=lambda e: self.set_theme("dark")),
+                            ft.IconButton(icon=ft.Icons.LENS, icon_color="#8175FF", tooltip="Purple",
+                                          on_click=lambda e: self.set_theme("purple")),
+                            ft.IconButton(icon=ft.Icons.LENS, icon_color="#34D399", tooltip="Emerald",
+                                          on_click=lambda e: self.set_theme("emerald")),
+                        ], alignment=ft.MainAxisAlignment.SPACE_AROUND,
                     ),
-                    ft.Divider(height=10, color=p["stroke"]),
-                    ft.Text("Всі користувачі", size=12, color=p["muted"]),
-                    *[
-                        ft.Container(
-                            padding=8,
-                            border_radius=12,
-                            bgcolor=p["panel_2"],
-                            content=ft.Row(
-                                [
-                                    ft.Text((u["avatar"] if u["avatar"] else "😀"), size=14),
-                                    ft.Column(
+                    ft.Divider(height=1, color=p["stroke"]),
+                    ft.Text("КОРИСТУВАЧІ", size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
+                    ft.Container(
+                        expand=True,
+                        content=ft.Column(
+                            [
+                                ft.Container(
+                                    padding=8, border_radius=12, bgcolor=p["panel_2"],
+                                    content=ft.Row(
                                         [
-                                            ft.Text(u["display_name"] or u["username"], color=p["text"], size=12),
-                                            ft.Text(f"@{u['username']}", color=p["muted"], size=10),
-                                        ],
-                                        spacing=0,
-                                        tight=True,
+                                            ft.Text(u.get("avatar") or "😀", size=17),
+                                            ft.Column(
+                                                [
+                                                    ft.Text(u.get("display_name") or u.get("username", "Користувач"),
+                                                            color=p["text"], size=11, max_lines=1),
+                                                    ft.Text("@" + u.get("username", ""), color=p["muted"], size=10),
+                                                ], spacing=1, tight=True, expand=True,
+                                            ),
+                                        ], spacing=8,
                                     ),
-                                ],
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            ),
-                        )
-                        for u in list_all_users()
-                    ],
-                ],
-                spacing=8,
-                scroll=ft.ScrollMode.AUTO,
+                                )
+                                for u in list_all_users()
+                            ], spacing=7, scroll=ft.ScrollMode.AUTO,
+                        ),
+                    ),
+                ], spacing=9, expand=True,
             ),
         )
 
         return ft.Container(
-            expand=True,
-            padding=16,
-            content=ft.Row(
-                [
-                    sidebar,
-                    chat_area,
-                    right_panel,
-                ],
-                spacing=14,
-                expand=True,
-            ),
+            expand=True, padding=12,
+            content=ft.Row([sidebar, chat_area, right_panel], spacing=12, expand=True),
         )
 
 
@@ -1079,7 +1110,8 @@ def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
     page.window_min_width = 980
-    page.window_min_height = 780
+    page.window_min_height = 700
+    page.bgcolor = "#0B1020"
     page.scroll = None
 
     app = LogicordApp(page)
