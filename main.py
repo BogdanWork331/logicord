@@ -1175,7 +1175,7 @@ class LogicordApp:
             bgcolor="#5140F6",
             border=ft.InputBorder.NONE,
             content_padding=ft.Padding(0, 0, 0, 0),
-            on_change=lambda e: self.set_language(e.control.value),
+            on_select=lambda e: self.set_language(e.control.value),
         )
         language_bar = ft.Container(
             height=29,
