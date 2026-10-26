@@ -875,10 +875,10 @@ class LogicordApp:
             ),
         )
         brand = ft.Container(
-            width=116,
-            height=140,
-            padding=ft.Padding(7, 10, 7, 7),
-            bgcolor="#0A1020",
+            width=124,
+            height=132,
+            padding=ft.Padding(0, 4, 0, 4),
+            bgcolor=None,
             alignment=ft.Alignment(0, 0),
             content=ft.Column(
                 controls=[
@@ -1047,6 +1047,7 @@ class LogicordApp:
                 reg_display_name,
                 reg_password,
                 reg_avatar,
+                ft.Container(height=4),
                 primary_auth_button(
                     self.tr("Створити обліковий запис"),
                     lambda e: self.register(
@@ -1059,7 +1060,7 @@ class LogicordApp:
                 error_box,
                 success_box,
             ],
-            spacing=6,
+            spacing=5,
             tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.START,
         )
@@ -1113,7 +1114,7 @@ class LogicordApp:
                     height=37,
                     padding=ft.Padding(7, 4, 7, 4),
                     border_radius=8,
-                    bgcolor=FEATURE_ITEM,
+                    bgcolor=None,
                     content=ft.Row(
                         controls=[
                             ft.Container(
@@ -1144,9 +1145,9 @@ class LogicordApp:
 
         feature_panel = ft.Container(
             width=250,
-            height=230,
+            height=240,
             padding=ft.Padding(7, 9, 7, 9),
-            bgcolor=FEATURE_BG,
+            bgcolor=None,
             content=ft.Column(
                 controls=feature_cards,
                 spacing=5,
@@ -1168,36 +1169,31 @@ class LogicordApp:
         language_dropdown = ft.Dropdown(
             value=self.state.language,
             options=language_options,
-            width=116,
-            height=28,
-            text_size=10,
+            width=168,
+            height=34,
+            text_size=11,
             color="#FFFFFF",
             bgcolor="#5140F6",
             border=ft.InputBorder.NONE,
-            content_padding=ft.Padding(0, 0, 0, 0),
+            leading_icon=ft.Icons.LANGUAGE,
+            content_padding=ft.Padding(7, 0, 7, 0),
             on_select=lambda e: self.set_language(e.control.value),
         )
         language_bar = ft.Container(
-            height=29,
-            padding=ft.Padding(7, 0, 4, 0),
+            width=168,
+            height=38,
+            padding=0,
             border_radius=6,
             bgcolor="#5140F6",
-            content=ft.Row(
-                controls=[
-                    ft.Icon(ft.Icons.LANGUAGE, size=15, color="#FFFFFF"),
-                    language_dropdown,
-                ],
-                spacing=4,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                tight=True,
-            ),
+            alignment=ft.Alignment(0, 0),
+            content=language_dropdown,
         )
 
         # --------------------- Main glass card ---------------------
         auth_card = ft.Container(
-            width=850,
-            height=380,
-            padding=ft.Padding(12, 10, 12, 8),
+            width=920,
+            height=410,
+            padding=ft.Padding(14, 12, 14, 9),
             border_radius=10,
             gradient=ft.LinearGradient(
                 begin=ft.Alignment(-1, -1),
@@ -1217,7 +1213,7 @@ class LogicordApp:
                         expand=True,
                         content=ft.Row(
                             controls=[auth_content, feature_side],
-                            spacing=30,
+                            spacing=34,
                             expand=True,
                             vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                         ),
@@ -1343,12 +1339,12 @@ class LogicordApp:
         # browser windows.
         foreground = ft.Container(
             expand=True,
-            padding=ft.Padding(18, 56, 18, 18),
+            padding=ft.Padding(18, 38, 18, 18),
             alignment=ft.Alignment(0, -1),
             content=ft.Column(
                 controls=[
                     brand,
-                    ft.Container(height=18),
+                    ft.Container(height=14),
                     auth_card,
                 ],
                 spacing=0,
