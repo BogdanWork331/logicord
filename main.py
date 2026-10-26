@@ -752,272 +752,619 @@ class LogicordApp:
             self.scroll_to_latest(force=True)
 #МЕНЮ АВТОРІЗАЦІІ!!! -----------------------------------------
     def build_auth(self) -> ft.Control:
-        p = self.palette()
+        """Build the complete Logicord sign-in / registration screen.
 
-        # Left branding panel: gradient, glow and compact feature list.
-        logo = ft.Container(
-            width=78,
-            height=78,
-            border_radius=23,
-            alignment=ft.Alignment(0, 0),
-            gradient=ft.LinearGradient(
-                begin=ft.Alignment(-1, -1),
-                end=ft.Alignment(1, 1),
-                colors=[p["accent"], "#6255F5", "#3930A8"],
-            ),
-            shadow=ft.BoxShadow(
-                blur_radius=26,
-                spread_radius=1,
-                color=p["accent"],
-                offset=ft.Offset(0, 0),
-            ),
-            content=ft.Text("LoGi", size=27, weight=ft.FontWeight.BOLD, color="#FFFFFF"),
-        )
-        title = ft.Column(
-            [
-                logo,
-                ft.Text(APP_NAME, size=31, weight=ft.FontWeight.BOLD, color=p["text"]),
-                ft.Text(
-                    self.tr("Найкращий чат у MAX, точно!"),
-                    size=13,
-                    color=p["muted"],
-                    text_align=ft.TextAlign.CENTER,
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=11,
-            tight=True,
-        )
+        Only this presentation method is redesigned. Authentication, account
+        creation, translations, language changes and theme logic are delegated
+        to the existing methods on LogicordApp.
+        """
+        # Premium palette from the supplied reference image.
+        BG = "#03050A"
+        CARD = "#0B1328"
+        CARD_MID = "#101D42"
+        CARD_LIGHT = "#15224A"
+        INPUT_BG = "#111B35"
+        FEATURE_BG = "#0B1224"
+        FEATURE_ITEM = "#111B35"
+        BORDER = "#26355F"
+        BORDER_SOFT = "#1B294B"
+        ACCENT = "#6B7CFF"
+        ACCENT_BRIGHT = "#5865F2"
+        TEXT = "#EDF1FF"
+        MUTED = "#929FC3"
+        SUCCESS = "#43D9A3"
+        DANGER = "#FF7188"
 
-        features = [
-            (ft.Icons.BOLT, self.tr("Гнучкий інтерфейс")),
-            (ft.Icons.SHIELD_OUTLINED, self.tr("Швидка реєстрація")),
-            (ft.Icons.PALETTE_OUTLINED, self.tr("Багато функцій")),
-            (ft.Icons.TUNE, self.tr("Гнучкість налаштування")),
-            (ft.Icons.AUTO_AWESOME, self.tr("Темні акцентні теми")),
-        ]
-        feature_rows = []
-        for icon, label in features:
-            feature_rows.append(
-                ft.Row(
-                    [
-                        ft.Container(
-                            width=36,
-                            height=36,
-                            border_radius=12,
-                            bgcolor=p["panel_2"],
-                            border=ft.Border.all(1, p["stroke"]),
-                            alignment=ft.Alignment(0, 0),
-                            content=ft.Icon(icon, size=19, color=p["accent"]),
-                        ),
-                        ft.Text(label, size=13, color=p["text"], weight=ft.FontWeight.W_500),
-                    ],
-                    spacing=11,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                )
+        # Small reusable controls keep both modes visually consistent.
+        def auth_input(
+            hint: str,
+            icon,
+            *,
+            password: bool = False,
+            on_submit=None,
+        ) -> ft.TextField:
+            return ft.TextField(
+                hint_text=hint,
+                width=320,
+                height=40,
+                prefix_icon=icon,
+                password=password,
+                can_reveal_password=password,
+                on_submit=on_submit,
+                text_size=12,
+                color=TEXT,
+                hint_style=ft.TextStyle(color=MUTED, size=12),
+                cursor_color=ACCENT,
+                bgcolor=INPUT_BG,
+                border_color=BORDER,
+                focused_border_color=ACCENT_BRIGHT,
+                border_width=1,
+                focused_border_width=1.4,
+                border_radius=8,
+                content_padding=ft.Padding(12, 8, 12, 8),
             )
 
-        intro = ft.Container(
-            expand=1,
-            padding=30,
-            border_radius=24,
+        def auth_tab(label: str, mode: str) -> ft.Control:
+            selected = self.state.mode == mode
+            return ft.Container(
+                width=86,
+                height=31,
+                border_radius=9,
+                bgcolor=ACCENT if selected else "#111B35",
+                border=ft.Border.all(1, ACCENT if selected else "#29375A"),
+                alignment=ft.Alignment(0, 0),
+                ink=True,
+                on_click=lambda e, target=mode: self.toggle_mode(target),
+                content=ft.Text(
+                    label,
+                    size=11,
+                    color="#FFFFFF" if selected else "#B8C3E2",
+                    weight=ft.FontWeight.W_600 if selected else ft.FontWeight.NORMAL,
+                ),
+            )
+
+        def primary_auth_button(label: str, on_click) -> ft.Control:
+            return ft.Container(
+                width=320,
+                height=40,
+                border_radius=8,
+                gradient=ft.LinearGradient(
+                    begin=ft.Alignment(-1, -1),
+                    end=ft.Alignment(1, 1),
+                    colors=["#7584FF", ACCENT, ACCENT_BRIGHT],
+                ),
+                shadow=ft.BoxShadow(
+                    blur_radius=20,
+                    spread_radius=0,
+                    color="#50304FFE",
+                    offset=ft.Offset(0, 3),
+                ),
+                alignment=ft.Alignment(0, 0),
+                ink=True,
+                on_click=on_click,
+                content=ft.Text(
+                    label,
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color="#FFFFFF",
+                ),
+            )
+
+        # -------------------------- Logo --------------------------
+        logo_mark = ft.Container(
+            width=62,
+            height=62,
+            border_radius=18,
             gradient=ft.LinearGradient(
                 begin=ft.Alignment(-1, -1),
                 end=ft.Alignment(1, 1),
-                colors=[p["panel"], p["bg"], p["panel_2"]],
+                colors=["#7D8BFF", "#6258F4", "#4033C4"],
             ),
-            border=ft.Border.all(1, p["stroke"]),
+            shadow=ft.BoxShadow(
+                blur_radius=27,
+                spread_radius=1,
+                color="#665865F2",
+                offset=ft.Offset(0, 0),
+            ),
+            alignment=ft.Alignment(0, 0),
+            content=ft.Text(
+                "LoGi",
+                size=20,
+                weight=ft.FontWeight.BOLD,
+                color="#FFFFFF",
+            ),
+        )
+        brand = ft.Container(
+            width=116,
+            height=140,
+            padding=ft.Padding(7, 10, 7, 7),
+            bgcolor="#0A1020",
+            alignment=ft.Alignment(0, 0),
             content=ft.Column(
-                [
-                    title,
-                    ft.Container(height=14),
-                    ft.Column(feature_rows, spacing=11, tight=True),
-                    ft.Container(height=10),
-                    ft.Text(self.tr("ЯЗЫК / LANGUAGE") if self.state.language == "ru" else self.tr("ЯЗЫК / LANGUAGE"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
-                    self.language_picker(),
-                    ft.Container(height=10),
-                    ft.Text(self.tr("ОБЕРІТЬ СВОЮ ТЕМУ"), size=10, color=p["muted"], weight=ft.FontWeight.BOLD),
-                    ft.Row(
-                        [
-                            self.pill_button("Dark", lambda e: self.set_theme("dark"), self.state.theme == "dark"),
-                            self.pill_button("Purple", lambda e: self.set_theme("purple"), self.state.theme == "purple"),
-                            self.pill_button("Emerald", lambda e: self.set_theme("emerald"), self.state.theme == "emerald"),
-                        ],
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=8,
-                        wrap=True,
+                controls=[
+                    logo_mark,
+                    ft.Text(
+                        APP_NAME,
+                        size=22,
+                        weight=ft.FontWeight.BOLD,
+                        color=TEXT,
+                        text_align=ft.TextAlign.CENTER,
                     ),
                 ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=7,
-                scroll=ft.ScrollMode.AUTO,
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         )
 
-        # Authentication controls intentionally keep the original workflow and layout.
-        login_username = ft.TextField(label=self.tr("Логін"), width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value))
-        login_password = ft.TextField(
-            label=self.tr("Пароль"), width=320, password=True,
-            can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
-            on_submit=lambda e: self.login(login_username.value, login_password.value, login_remember.value),
+        # -------------------- Original input state --------------------
+        login_username = auth_input(
+            self.tr("Логін"),
+            ft.Icons.PERSON_OUTLINE,
+            on_submit=lambda e: self.login(
+                login_username.value,
+                login_password.value,
+                login_remember.value,
+            ),
         )
-        login_remember = ft.Checkbox(label=self.tr("Запам'ятати мене"), value=True)
+        login_password = auth_input(
+            self.tr("Пароль"),
+            ft.Icons.LOCK_OUTLINE,
+            password=True,
+            on_submit=lambda e: self.login(
+                login_username.value,
+                login_password.value,
+                login_remember.value,
+            ),
+        )
+        login_remember = ft.Checkbox(
+            label=self.tr("Запам'ятати мене"),
+            value=True,
+            active_color=ACCENT,
+            check_color="#FFFFFF",
+            label_style=ft.TextStyle(color="#C5CDE6", size=11),
+        )
 
-        reg_username = ft.TextField(label=self.tr("Логін"), width=320, prefix_icon=ft.Icons.PERSON_OUTLINE, on_submit=lambda e: self.register(reg_username.value, reg_password.value, reg_display_name.value, reg_avatar.value))
-        reg_display_name = ft.TextField(label=self.tr("Ім'я в чаті"), width=320, prefix_icon=ft.Icons.BADGE_OUTLINED)
-        reg_password = ft.TextField(
-            label=self.tr("Пароль"), width=320, password=True,
-            can_reveal_password=True, prefix_icon=ft.Icons.LOCK_OUTLINE,
+        reg_username = auth_input(
+            self.tr("Логін"),
+            ft.Icons.PERSON_OUTLINE,
             on_submit=lambda e: self.register(
-                reg_username.value, reg_password.value,
-                reg_display_name.value, reg_avatar.value,
+                reg_username.value,
+                reg_password.value,
+                reg_display_name.value,
+                reg_avatar.value,
+            ),
+        )
+        reg_display_name = auth_input(
+            self.tr("Ім'я в чаті"),
+            ft.Icons.BADGE_OUTLINED,
+        )
+        reg_password = auth_input(
+            self.tr("Пароль"),
+            ft.Icons.LOCK_OUTLINE,
+            password=True,
+            on_submit=lambda e: self.register(
+                reg_username.value,
+                reg_password.value,
+                reg_display_name.value,
+                reg_avatar.value,
             ),
         )
         reg_avatar = ft.Dropdown(
-            label=self.tr("Аватар"), width=320, value="😀",
+            hint_text=self.tr("Аватар"),
+            width=320,
+            height=40,
+            value="😀",
             options=[ft.dropdown.Option(a) for a in AVATARS],
+            text_size=12,
+            color=TEXT,
+            bgcolor=INPUT_BG,
+            border_color=BORDER,
+            focused_border_color=ACCENT_BRIGHT,
+            border_width=1,
+            border_radius=8,
+            content_padding=ft.Padding(12, 7, 12, 7),
         )
 
+        # Keep the existing feedback state and translations.
         error_box = ft.Container(
-            visible=bool(self.state.error), padding=10, border_radius=12,
-            bgcolor=p["panel"], border=ft.Border.all(1, p["danger"]),
-            content=ft.Text(self.state.error, color=p["danger"], size=12),
+            visible=bool(self.state.error),
+            width=320,
+            padding=ft.Padding(9, 8, 9, 8),
+            border_radius=8,
+            bgcolor="#24131E",
+            border=ft.Border.all(1, "#633149"),
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=16, color=DANGER),
+                    ft.Container(
+                        expand=True,
+                        content=ft.Text(self.state.error, size=11, color="#FF9CAD"),
+                    ),
+                ],
+                spacing=7,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
         )
         success_box = ft.Container(
-            visible=bool(self.state.success), padding=10, border_radius=12,
-            bgcolor=p["panel"], border=ft.Border.all(1, p["accent"]),
-            content=ft.Text(self.state.success, color=p["accent"], size=12),
+            visible=bool(self.state.success),
+            width=320,
+            padding=ft.Padding(9, 8, 9, 8),
+            border_radius=8,
+            bgcolor="#10251F",
+            border=ft.Border.all(1, "#245743"),
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=16, color=SUCCESS),
+                    ft.Container(
+                        expand=True,
+                        content=ft.Text(self.state.success, size=11, color=SUCCESS),
+                    ),
+                ],
+                spacing=7,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
         )
 
+        # ----------------------- Login form -----------------------
         login_form = ft.Column(
-            [
-                ft.Text(self.tr("Вхід"), size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
-                login_username, login_password, login_remember,
-                ft.Row(
-                    [
-                        self.primary_button(
-                            self.tr("Увійти"),
-                            lambda e: self.login(
-                                login_username.value, login_password.value, login_remember.value
-                            ),
-                        ),
-                        ft.TextButton(self.tr("Реєстрація"), on_click=lambda e: self.toggle_mode("register")),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                ),
-            ], spacing=10, tight=True,
-        )
-        # Registration-only visual refresh. Login UI and all other controls stay unchanged.
-        # Compact field styling keeps the registration form balanced inside the existing card.
-        for field in (reg_username, reg_display_name, reg_password):
-            field.height = 42
-            field.text_size = 12
-            field.color = p["text"]
-            field.cursor_color = p["accent"]
-            field.bgcolor = p["panel"]
-            field.border_color = p["stroke"]
-            field.focused_border_color = p["accent"]
-            field.border_width = 1
-            field.focused_border_width = 1.5
-            field.border_radius = 9
-            field.content_padding = ft.Padding(12, 8, 12, 8)
-            field.label_style = ft.TextStyle(color=p["muted"], size=12)
-
-        reg_avatar.height = 42
-        reg_avatar.text_size = 12
-        reg_avatar.color = p["text"]
-        reg_avatar.bgcolor = p["panel"]
-        reg_avatar.border_color = p["stroke"]
-        reg_avatar.focused_border_color = p["accent"]
-        reg_avatar.border_width = 1
-        reg_avatar.border_radius = 9
-        reg_avatar.content_padding = ft.Padding(12, 8, 12, 8)
-        reg_avatar.label_style = ft.TextStyle(color=p["muted"], size=12)
-
-        register_form = ft.Column(
             controls=[
                 ft.Text(
-                    self.tr("Реєстрація"),
-                    size=20,
+                    self.tr("Вхід"),
+                    size=16,
                     weight=ft.FontWeight.BOLD,
-                    color=p["text"],
+                    color=TEXT,
                 ),
-                ft.Text(
-                    self.tr("Простір спілкування"),
-                    size=11,
-                    color=p["muted"],
-                ),
-                ft.Container(height=2),
-                reg_username,
-                reg_display_name,
-                reg_password,
-                reg_avatar,
-                ft.Container(height=2),
-                ft.FilledButton(
-                    self.tr("Створити обліковий запис"),
-                    width=320,
-                    height=44,
-                    on_click=lambda e: self.register(
-                        reg_username.value,
-                        reg_password.value,
-                        reg_display_name.value,
-                        reg_avatar.value,
-                    ),
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=9),
-                        padding=ft.Padding(16, 10, 16, 10),
-                        bgcolor=p["accent"],
-                        color="#FFFFFF",
-                        overlay_color=p["accent"],
+                login_username,
+                login_password,
+                ft.Container(width=320, content=login_remember),
+                primary_auth_button(
+                    self.tr("Увійти"),
+                    lambda e: self.login(
+                        login_username.value,
+                        login_password.value,
+                        login_remember.value,
                     ),
                 ),
-                ft.Container(
-                    width=320,
-                    padding=ft.Padding(0, 2, 0, 0),
-                    alignment=ft.Alignment(0, 0),
-                    content=ft.TextButton(
-                        self.tr("Вхід"),
-                        on_click=lambda e: self.toggle_mode("login"),
-                        style=ft.ButtonStyle(
-                            color=p["accent"],
-                            padding=ft.Padding(8, 3, 8, 3),
-                        ),
-                    ),
-                ),
+                error_box,
+                success_box,
             ],
             spacing=7,
             tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.START,
         )
 
-        form_card = ft.Container(
-            expand=1,
-            padding=24,
-            border_radius=24,
-            bgcolor=p["panel_2"],
-            border=ft.Border.all(1, p["stroke"]),
+        # -------------------- Registration form --------------------
+        register_form = ft.Column(
+            controls=[
+                ft.Text(
+                    self.tr("Реєстрація"),
+                    size=16,
+                    weight=ft.FontWeight.BOLD,
+                    color=TEXT,
+                ),
+                reg_username,
+                reg_display_name,
+                reg_password,
+                reg_avatar,
+                primary_auth_button(
+                    self.tr("Створити обліковий запис"),
+                    lambda e: self.register(
+                        reg_username.value,
+                        reg_password.value,
+                        reg_display_name.value,
+                        reg_avatar.value,
+                    ),
+                ),
+                error_box,
+                success_box,
+            ],
+            spacing=6,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
+        )
+
+        # Left half: tabs and currently selected form. A scroll area prevents
+        # clipping on smaller windows when the registration form is displayed.
+        auth_content = ft.Container(
+            width=390,
+            padding=ft.Padding(0, 8, 0, 0),
             content=ft.Column(
-                [
+                controls=[
                     ft.Row(
-                        [
-                            self.pill_button(self.tr("Вхід"), lambda e: self.toggle_mode("login"), self.state.mode == "login"),
-                            self.pill_button(self.tr("Реєстрація"), lambda e: self.toggle_mode("register"), self.state.mode == "register"),
+                        controls=[
+                            auth_tab(self.tr("Вхід"), "login"),
+                            auth_tab(self.tr("Реєстрація"), "register"),
                         ],
+                        spacing=3,
                         alignment=ft.MainAxisAlignment.START,
                     ),
-                    ft.Container(height=8),
-                    login_form if self.state.mode == "login" else register_form,
-                    error_box,
-                    success_box,
-                ], spacing=12, tight=True,
+                    ft.Container(height=5),
+                    ft.Container(
+                        expand=True,
+                        content=ft.Column(
+                            controls=[
+                                login_form if self.state.mode == "login" else register_form,
+                            ],
+                            spacing=0,
+                            scroll=ft.ScrollMode.AUTO,
+                            horizontal_alignment=ft.CrossAxisAlignment.START,
+                        ),
+                    ),
+                ],
+                spacing=0,
+                expand=True,
+                horizontal_alignment=ft.CrossAxisAlignment.START,
+            ),
+        )
+
+        # ---------------------- Feature panel ----------------------
+        feature_specs = [
+            (ft.Icons.BOLT, "Гнучкий інтерфейс"),
+            (ft.Icons.SHIELD_OUTLINED, "Швидка реєстрація"),
+            (ft.Icons.PALETTE_OUTLINED, "Багато функцій"),
+            (ft.Icons.TUNE, "Гнучкість налаштування"),
+            (ft.Icons.AUTO_AWESOME, "Темні акцентні теми"),
+        ]
+        feature_cards: list[ft.Control] = []
+        for icon, translation_key in feature_specs:
+            feature_cards.append(
+                ft.Container(
+                    height=37,
+                    padding=ft.Padding(7, 4, 7, 4),
+                    border_radius=8,
+                    bgcolor=FEATURE_ITEM,
+                    content=ft.Row(
+                        controls=[
+                            ft.Container(
+                                width=27,
+                                height=27,
+                                border_radius=7,
+                                bgcolor="#1B284B",
+                                alignment=ft.Alignment(0, 0),
+                                content=ft.Icon(icon, size=15, color=ACCENT),
+                            ),
+                            ft.Container(
+                                expand=True,
+                                content=ft.Text(
+                                    self.tr(translation_key),
+                                    size=10,
+                                    color="#D5DCF3",
+                                    weight=ft.FontWeight.W_500,
+                                    max_lines=2,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                ),
+                            ),
+                        ],
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                )
+            )
+
+        feature_panel = ft.Container(
+            width=250,
+            height=230,
+            padding=ft.Padding(7, 9, 7, 9),
+            bgcolor=FEATURE_BG,
+            content=ft.Column(
+                controls=feature_cards,
+                spacing=5,
+                tight=True,
+                alignment=ft.MainAxisAlignment.START,
+            ),
+        )
+        feature_side = ft.Container(
+            width=250,
+            padding=ft.Padding(0, 17, 0, 0),
+            content=feature_panel,
+        )
+
+        # -------------------- Compact language menu --------------------
+        language_options = [
+            ft.dropdown.Option(code, text=language_name)
+            for code, language_name in LANGUAGES.items()
+        ]
+        language_dropdown = ft.Dropdown(
+            value=self.state.language,
+            options=language_options,
+            width=116,
+            height=28,
+            text_size=10,
+            color="#FFFFFF",
+            bgcolor="#5140F6",
+            border=ft.InputBorder.NONE,
+            content_padding=ft.Padding(0, 0, 0, 0),
+            on_change=lambda e: self.set_language(e.control.value),
+        )
+        language_bar = ft.Container(
+            height=29,
+            padding=ft.Padding(7, 0, 4, 0),
+            border_radius=6,
+            bgcolor="#5140F6",
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.LANGUAGE, size=15, color="#FFFFFF"),
+                    language_dropdown,
+                ],
+                spacing=4,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                tight=True,
+            ),
+        )
+
+        # --------------------- Main glass card ---------------------
+        auth_card = ft.Container(
+            width=850,
+            height=380,
+            padding=ft.Padding(12, 10, 12, 8),
+            border_radius=10,
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment(-1, -1),
+                end=ft.Alignment(1, 1),
+                colors=[CARD, CARD_MID, CARD_LIGHT],
+            ),
+            border=ft.Border.all(1, BORDER),
+            shadow=ft.BoxShadow(
+                blur_radius=38,
+                spread_radius=1,
+                color="#46304FFE",
+                offset=ft.Offset(0, 0),
+            ),
+            content=ft.Column(
+                controls=[
+                    ft.Container(
+                        expand=True,
+                        content=ft.Row(
+                            controls=[auth_content, feature_side],
+                            spacing=30,
+                            expand=True,
+                            vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                        ),
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.Container(expand=True),
+                            language_bar,
+                        ],
+                        alignment=ft.MainAxisAlignment.END,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=0,
+                expand=True,
+            ),
+        )
+
+        # -------------------- Glowing background --------------------
+        background = ft.Stack(
+            expand=True,
+            controls=[
+                ft.Container(
+                    expand=True,
+                    bgcolor=BG,
+                ),
+                # Wide, blurred-looking blue beams are layered behind sharp lines.
+                ft.Container(
+                    left=-70,
+                    top=148,
+                    width=350,
+                    height=23,
+                    rotate=ft.Rotate(angle=-1.05),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, 0),
+                        end=ft.Alignment(1, 0),
+                        colors=["#00000000", "#10304FFE", "#24304FFE", "#10304FFE", "#00000000"],
+                    ),
+                ),
+                ft.Container(
+                    left=-70,
+                    top=148,
+                    width=350,
+                    height=5,
+                    rotate=ft.Rotate(angle=-1.05),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, 0),
+                        end=ft.Alignment(1, 0),
+                        colors=["#00000000", "#1739B8", "#304FFE", "#717CFF", "#304FFE", "#00000000"],
+                    ),
+                    shadow=ft.BoxShadow(
+                        blur_radius=20,
+                        spread_radius=1,
+                        color="#66304FFE",
+                        offset=ft.Offset(0, 0),
+                    ),
+                ),
+                ft.Container(
+                    left=-50,
+                    top=488,
+                    width=650,
+                    height=25,
+                    rotate=ft.Rotate(angle=0.66),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, 0),
+                        end=ft.Alignment(1, 0),
+                        colors=["#00000000", "#0C1745", "#17296E", "#0C1745", "#00000000"],
+                    ),
+                ),
+                ft.Container(
+                    left=-50,
+                    top=497,
+                    width=650,
+                    height=5,
+                    rotate=ft.Rotate(angle=0.66),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, 0),
+                        end=ft.Alignment(1, 0),
+                        colors=["#00000000", "#1C3AC8", "#304FFE", "#5865F2", "#304FFE", "#00000000"],
+                    ),
+                    shadow=ft.BoxShadow(
+                        blur_radius=22,
+                        spread_radius=1,
+                        color="#55304FFE",
+                        offset=ft.Offset(0, 0),
+                    ),
+                ),
+                ft.Container(
+                    right=-80,
+                    bottom=163,
+                    width=650,
+                    height=27,
+                    rotate=ft.Rotate(angle=-0.65),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, 0),
+                        end=ft.Alignment(1, 0),
+                        colors=["#00000000", "#0B1645", "#172966", "#0B1645", "#00000000"],
+                    ),
+                ),
+                ft.Container(
+                    right=-80,
+                    bottom=175,
+                    width=650,
+                    height=6,
+                    rotate=ft.Rotate(angle=-0.65),
+                    gradient=ft.LinearGradient(
+                        begin=ft.Alignment(-1, 0),
+                        end=ft.Alignment(1, 0),
+                        colors=["#00000000", "#1739B8", "#304FFE", "#717CFF", "#304FFE", "#00000000"],
+                    ),
+                    shadow=ft.BoxShadow(
+                        blur_radius=22,
+                        spread_radius=1,
+                        color="#55304FFE",
+                        offset=ft.Offset(0, 0),
+                    ),
+                ),
+            ],
+        )
+
+        # The branding and authentication card sit together near the upper
+        # center, like the supplied screenshot, with scroll support for short
+        # browser windows.
+        foreground = ft.Container(
+            expand=True,
+            padding=ft.Padding(18, 56, 18, 18),
+            alignment=ft.Alignment(0, -1),
+            content=ft.Column(
+                controls=[
+                    brand,
+                    ft.Container(height=18),
+                    auth_card,
+                ],
+                spacing=0,
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                scroll=ft.ScrollMode.AUTO,
             ),
         )
 
         return ft.Container(
             expand=True,
-            padding=12,
-            content=ft.Row([intro, form_card], spacing=14, expand=True),
+            bgcolor=BG,
+            content=ft.Stack(
+                expand=True,
+                controls=[background, foreground],
+            ),
         )
 
     def build_message(self, msg: dict[str, Any]) -> ft.Control:
