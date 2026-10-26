@@ -908,23 +908,87 @@ class LogicordApp:
                 ),
             ], spacing=10, tight=True,
         )
+        # Registration-only visual refresh. Login UI and all other controls stay unchanged.
+        # Compact field styling keeps the registration form balanced inside the existing card.
+        for field in (reg_username, reg_display_name, reg_password):
+            field.height = 42
+            field.text_size = 12
+            field.color = p["text"]
+            field.cursor_color = p["accent"]
+            field.bgcolor = p["panel"]
+            field.border_color = p["stroke"]
+            field.focused_border_color = p["accent"]
+            field.border_width = 1
+            field.focused_border_width = 1.5
+            field.border_radius = 9
+            field.content_padding = ft.Padding(12, 8, 12, 8)
+            field.label_style = ft.TextStyle(color=p["muted"], size=12)
+
+        reg_avatar.height = 42
+        reg_avatar.text_size = 12
+        reg_avatar.color = p["text"]
+        reg_avatar.bgcolor = p["panel"]
+        reg_avatar.border_color = p["stroke"]
+        reg_avatar.focused_border_color = p["accent"]
+        reg_avatar.border_width = 1
+        reg_avatar.border_radius = 9
+        reg_avatar.content_padding = ft.Padding(12, 8, 12, 8)
+        reg_avatar.label_style = ft.TextStyle(color=p["muted"], size=12)
+
         register_form = ft.Column(
-            [
-                ft.Text(self.tr("Реєстрація"), size=20, weight=ft.FontWeight.BOLD, color=p["text"]),
-                reg_username, reg_display_name, reg_password, reg_avatar,
-                ft.Row(
-                    [
-                        self.primary_button(
-                            self.tr("Створити обліковий запис"),
-                            lambda e: self.register(
-                                reg_username.value, reg_password.value,
-                                reg_display_name.value, reg_avatar.value,
-                            ),
-                        ),
-                        ft.TextButton(self.tr("Вхід"), on_click=lambda e: self.toggle_mode("login")),
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            controls=[
+                ft.Text(
+                    self.tr("Реєстрація"),
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                    color=p["text"],
                 ),
-            ], spacing=10, tight=True,
+                ft.Text(
+                    self.tr("Простір спілкування"),
+                    size=11,
+                    color=p["muted"],
+                ),
+                ft.Container(height=2),
+                reg_username,
+                reg_display_name,
+                reg_password,
+                reg_avatar,
+                ft.Container(height=2),
+                ft.FilledButton(
+                    self.tr("Створити обліковий запис"),
+                    width=320,
+                    height=44,
+                    on_click=lambda e: self.register(
+                        reg_username.value,
+                        reg_password.value,
+                        reg_display_name.value,
+                        reg_avatar.value,
+                    ),
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=9),
+                        padding=ft.Padding(16, 10, 16, 10),
+                        bgcolor=p["accent"],
+                        color="#FFFFFF",
+                        overlay_color=p["accent"],
+                    ),
+                ),
+                ft.Container(
+                    width=320,
+                    padding=ft.Padding(0, 2, 0, 0),
+                    alignment=ft.Alignment(0, 0),
+                    content=ft.TextButton(
+                        self.tr("Вхід"),
+                        on_click=lambda e: self.toggle_mode("login"),
+                        style=ft.ButtonStyle(
+                            color=p["accent"],
+                            padding=ft.Padding(8, 3, 8, 3),
+                        ),
+                    ),
+                ),
+            ],
+            spacing=7,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
         )
 
         form_card = ft.Container(
